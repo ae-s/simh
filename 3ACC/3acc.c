@@ -9,13 +9,69 @@ static SIM_INLINE microcycle(struct proc *cu)
 {
 	microinstruction mi;
 
-	/* ==== PHASE 1 START ====
-	 * ==== PHASE 1 START ====
-	 * ==== PHASE 1 START ====
-	 * ==== PHASE 1 START ====
-	 */
+	// for now, the two-stage microinstruction pipeline isn't
+	// properly interleaved.  that will come.
 
-	mir.q = cu->micro.ucode[cu->micro.mar];
+	/* **** microinstruction pipeline, stage 1 **** */
+	reg12 mar = cu->micro.mar;
+	microinstruction mir = cu->micro.mir;
+
+	// fundamentally, this microcycle needs to decide what the Next
+	// Address should be, and load from the microstore to the MIR.
+
+	if (mir.mi.ca == 1) {
+		/* the CA bit means "increment the address instead of loading
+		 * it", but due to a hardware limitation (this is done by
+		 * ORing 1 into the low bit) it can only happen at even
+		 * addresses. */
+		mar |= 1;
+	} else {
+		mar = mir.mi.na;
+	}
+
+	if (mir.mi.na == 0xfff) {
+		/* all-ones detector: load the RAR into the MIR; return from
+		 * microsubroutine */
+		mar = cu->micro.rar;
+		cu->micro.ff.ru = true;
+	} else if (mir.mi.na == 0x000) {
+		/* return from instruction xxx */
+	}
+
+	if (cu->micro.ff.ru) {
+		/* rar update (RU flipflop) is enabled: we are not in a
+		 * microsubroutine */
+		cu->micro.rar = mar;
+	}
+
+	if (/* complement correction required xxx */) {
+		// xxx: is this the previous mir (cu->micro.mir)
+		// or the current mir (mir)?
+		cu->micro.erar = cu->micro.mir;
+		mar = 00777; // hardcoded, see sh B1GN loc E8
+	}
+
+	/* many ff's are cleared late in the microcycle, during phase P3.
+	 * cite: sh B1GH, loc F0-F8 */
+	cu->micro.ff.alo = false;
+	cu->micro.ff.lint = false;
+	cu->micro.ff.lnop = false;
+	cu->micro.ff.lsir = false;
+	cu->micro.ff.malz = false;
+	cu->micro.ff.smint = false;
+
+    // ==== PHASE 3
+	// "microstore output stable", sh b1gc
+	mir.q = cu->micro.ucode[mar];
+	cu->micro.mar = mar;
+
+	/* **** microinstruction pipeline, stage 2 **** */
+
+	/* ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 */
 
 #define GB18(from) cu->gb = from
 #define GB22(from) cu->gb = from
@@ -25,10 +81,10 @@ static SIM_INLINE microcycle(struct proc *cu)
 	 */
 	switch (mir.mi.from) {
 		/* first 16 listed are 1o4 L and 3o4 R */
-	case 0x17: // f1o4l1+f3o4r7
+	case 0x17: // f1o4l1+f3o4r7 (B1GB)
 		// RAR(0-11) => GB(8-19)
 		// [zeros in GB(0-7)]
-		// XXX
+		cu->gb = cu->micro.rar << 8;
 		break;
 	case 0x1b: // spare
 		break;
@@ -38,7 +94,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		GB18(cu->memctl.sir);
 		break;
 	case 0x27: // mchc(0-7) => gb(0-7)
-		// xxx
+		cu->gb = cu->mch.mchc & 0xff;
 		break;
 	case 0x2b: // spare
 		break;
@@ -135,7 +191,8 @@ static SIM_INLINE microcycle(struct proc *cu)
 		GB22(cu->mch.mchb);
 		break;
 	case 0x9a: // mms [mr4] => gb (12, pl, ph)
-		// xxx
+		// B4GB loc C0
+		GB18(cu->memctl.mms & 0xfff);
 		break;
 	case 0x9c: // ak [mr5] => gb (22)
 		GB22(cu->panel.ak);
@@ -154,7 +211,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		GB22(cu->panel.db);
 		break;
 	case 0xaa: // er [mr10] => gb (22)
-		// bus parity needs inhibit
+		// bus parity needs inhibit?
 		// XXX
 		GB22(cu->miscreg.er);
 		break;
@@ -259,7 +316,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 
 	switch (mir.mi.to) {
 		/* first 16 listed are 1o4 L and 3o4 R */
-	case 0x17: // gb(8-19,ph) => rar(0-11,ph)
+	case 0x17: // gb(8-19,ph) => rar(0-11,ph) (B1GB)
 		// xxx
 		break;
 	case 0x1b: // misc dec col 13
@@ -410,6 +467,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 
 	case 0x71: // gb => br (22)
 		GB22(cu->dml[0].br);
+		// B2GM loc g0: inh parity
 		break;
 	case 0x72: // complex gating
 		// xxx
@@ -421,6 +479,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		goto misc_dec;
 
 	case 0xb1: // gb => ar (22)
+		// B2GM loc g0: inh parity
 		GB22(cu->dml[0].ar);
 		break;
 	case 0xb2: // gb => ar0 (22)
@@ -433,6 +492,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		goto misc_dec;
 
 	case 0xd1: // complex gating
+		// B2GM loc g0: inh parity
 		// xxx
 		break;
 	case 0xd2: // spare
@@ -447,6 +507,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		// xxx
 		break;
 	case 0xe2: // gb => sib1 (18)
+		// B2GM loc g0: inh parity
 		// xxx
 		break;
 	case 0xe4: // gb => sdr1 (18)
@@ -480,82 +541,132 @@ misc_decoder:
 // row 0, d8
 	case 0xd827: break; // spare
 	case 0xd82b: break; // pymch xxx
+		// gate bits from br to mchtr
 	case 0xd82d: break; // hmrf xxx
+		// hardware initialize the 3a cc
 	case 0xd81d: break; // tmch xxx
+		// test the mch
 	case 0xd8d8: break; // idlmch xxx
+		// idle the mch
 	case 0xd8b8: break; // stmch xxx
 	case 0xd878: break; // spare
 	case 0xd8e8: break; // spare
 	case 0xd83a: break; // spare
 	case 0xd83c: break; // sopf xxx
+		// set opf
 	case 0xd8cc: break; // zopf xxx
+		// clear opf
 	case 0xd8ca: break; // zi xxx
+		// clear i bit
 	case 0xd8c9: break; // ti xxx
+		// test i bit
 	case 0xd81b: break; // si xxx
+		// set i bit
 
 // row 1, e8
 	case 0xe827: break; // spare
 	case 0xe82b: break; // zer xxx
+		// clear the error register
 	case 0xe82d: break; // zmint xxx
+		// clear the microinterpret bit
 	case 0xe81d: break; // iocc xxx
+		// interrupt the other cc
 	case 0xe8d8: break; // zms xxx
+		// clear the maintenance state register
 	case 0xe8b8: break; // zpt xxx
+		// clear the program timer
 	case 0xe878: break; // spare
 	case 0xe8e8: break; // spare
 	case 0xe83a: break; // spare
 	case 0xe83c: break; // ttr2 xxx
 	case 0xe8cc: break; // tdr xxx
+		// test dr
 	case 0xe8ca: break; // ty xxx
 	case 0xe8c9: break; // tx xxx
-	case 0xe81b: break; // zru xxx
+	case 0xe81b: break; // zru (B1GB) xxx
+		cu->micro.ff.ru0 = false;
+		// clear ru
 
 // row 2, 36
 	case 0x3627: break; // spare
 	case 0x362b: break; // iod => r11 xxx
+		// gate the iod to r11
 	case 0x362d: break; // s1db xxx
+		// gate switch register 1 to the db
 	case 0x361d: break; // imtc xxx
+		// idle the mch
 	case 0x36d8: break; // br => ti xxx
+		// gate br to ti (16)
 	case 0x36b8: break; // dml1 => cr xxx
+		// gate output of dml1 to cr
 	case 0x3678: break; // md4 stch xxx
-	case 0x36e8: break; // md0 idcd xxx
+		// start io
+	case 0x36e8: break; // md0 idch xxx
+		// idle io serial channel
 	case 0x363a: break; // spare
 	case 0x363c: break; // ttr1 xxx
 	case 0x36cc: break; // ds => cf xxx
+		// gate ds to cf
 	case 0x36ca: break; // tds xxx
 	case 0x36c9: break; // tcf xxx
+		// test cf
 	case 0x361b: break; // tflz xxx
+		// test for low zero in ar
 
 // row 3, 39
 	case 0x3927: break; // spare
 	case 0x392b: break; // sbtc xxx
+		// set block timer check bit
 	case 0x392d: break; // s2db xxx
+		// gate switch register 2 to the db
 	case 0x391d: break; // sdis xxx
+		// set the disable flip-flop
 	case 0x39d8: break; // inctc xxx
+		// increment the timing counter
 	case 0x39b8: break; // incpr xxx
-	case 0x3978: break; // md5 eios xxx
+		// increment the prescaler (part of tc)
+	case 0x3978: break; // md5 eio5 xxx
+		// enabli ios to iod
 	case 0x39e8: break; // md1 chtn xxx
+		// load r9 to ios (normal)
 	case 0x393a: break; // enb xxx
 	case 0x393c: break; // scf xxx
+		// set cf
 	case 0x39cc: break; // sds xxx
+		// set ds
 	case 0x39ca: break; // str1 xxx
+		// set tr1
 	case 0x39c9: break; // str2 xxx
+		// set tr2
 	case 0x391b: break; // sdr xxx
+		// set dr
 
 // row 4, 3a
 	case 0x3a27: break; // spare
 	case 0x3a2b: break; // spare
 	case 0x3a2d: break; // mchb => mchtr xxx
+		// gate mchb to mchtr [mdcmcbtr0]
 	case 0x3a1d: break; // s3db xxx
+		// gate switch register 3 to db
 	case 0x3ad8: break; // rar => fn xxx
+		// gate rar to fn [mdrarfn0]
 	case 0x3ab8: break; // mclstr xxx
+		// load the start code bit into mch
 	case 0x3a78: break; // md6 raio xxx
+		// enable r10 to iod
 	case 0x3ae8: break; // md2 chtm xxx
+		// load r9 to ios (maintenance)
 	case 0x3a3a: break; // ena xxx
 	case 0x3a3c: break; // zcf xxx
+		// clear cf
 	case 0x3acc: break; // zds xxx
+		// clear ds
 	case 0x3aca: break; // ztr1 xxx
+		// clear tr1
 	case 0x3ac9: break; // ztr2 xxx
+		// clear tr2
 	case 0x3a1b: break; // zdr xxx
+		// clear dr
 
 // row 5, 3c
 	case 0x3c27: break; // abrg xxx
@@ -565,13 +676,19 @@ misc_decoder:
 	case 0x3cd8: break; // spare
 	case 0x3cb8: break; // spare
 	case 0x3c78: break; // md7 spa xxx
+		// spare io control
 	case 0x3ce8: break; // md3 chc xxx
+		// load r9 to ios
 	case 0x3c3a: break; // spare
 	case 0x3c3c: break; // tbr0 xxx
+		// test bit 0 of br
 	case 0x3ccc: break; // tint xxx
+		// test for interrupts
 	case 0x3cca: break; // tpar xxx
+		// test parity bit in br
 	case 0x3cc9: break; // sib => sir1 xxx
 	case 0x3c1b: break; // tch xxx
+		// test io channel
 
 // row 6, c9
 	case 0xc927: break; // bar0 xxx
@@ -579,30 +696,63 @@ misc_decoder:
 	case 0xc92d: break; // bar2 xxx
 	case 0xc91d: break; // bar3 xxx
 	case 0xc9d8: break; // zdidk xxx
+		// clear di1 and dk1
 	case 0xc9b8: break; // dk1 => sdr1 xxx
+		// gate dk1 to sdr
 	case 0xc978: break; // di1 => sdr1 xxx
+		// gate di1 to sdr
 	case 0xc9e8: break; // br => pt xxx
 	case 0xc93a: break; // spare
 	case 0xc93c: break; // opf => ds xxx
+		// gate opf to ds
 	case 0xc9cc: break; // spare
 	case 0xc9ca: break; // spare
 	case 0xc9c9: break; // tmarp xxx
 	case 0xc91b: break; // exec xxx
+		// load a new opcode with servicing interrupts
 
 // row 7, ca
 	case 0xca27: break; // sbr xxx
 	case 0xca2b: break; // zbr xxx
 	case 0xca2d: break; // idswq xxx
+		// idle the switch sequencer in the mch
 	case 0xca1d: break; // sstp xxx
+		// set the stop bit
 	case 0xcad8: break; // stpasw xxx
+		// initiate a stop and switch to the other cc
 	case 0xcab8: break; // sba xxx
-	case 0xca78: break; // sd => dk+dk1; sa => ak xxx
+		// set the ba check list
+	case 0xca78: break; // sd => dk+dk1; sa => ak (note 2) xxx
 	case 0xcae8: break; // sd => di+di1 xxx
 	case 0xca3a: break; // srw xxx
 	case 0xca3c: break; // dfetch xxx
 	case 0xcacc: break; // sseiz xxx
-	case 0xcaca: break; // br => mms xxx
+	case 0xcaca: // br => mms xxx
+		// B4GB, loc B0 & B5
+		cu->memctl.mms = cu->dml[0].br & 0xfff;
+		break;
 	case 0xcac9: break; // erar => mar xxx
+		// perform an error microsubroutine by gating erar => mar
+		// erarmar00: b1gb, loc d4
+		// b1gd, loc g1
 	case 0xca1b: break; // sbpc xxx
 	}
+
+	/* ==== CLOCK PHASE 1 START ==== */
+	/* ==== CLOCK PHASE 1 START ==== */
+	/* ==== CLOCK PHASE 1 START ==== */
+	/* ==== CLOCK PHASE 1 START ==== */
+
+	/* ==== CLOCK PHASE 2 START ==== */
+	/* ==== CLOCK PHASE 2 START ==== */
+	/* ==== CLOCK PHASE 2 START ==== */
+	/* ==== CLOCK PHASE 2 START ==== */
+
+	
+
+	/* ==== CLOCK PHASE 3 START ==== */
+	/* ==== CLOCK PHASE 3 START ==== */
+	/* ==== CLOCK PHASE 3 START ==== */
+	/* ==== CLOCK PHASE 3 START ==== */
+
 }
