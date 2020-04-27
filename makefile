@@ -2025,7 +2025,11 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kx10_lp.c ${KL10D}/kl10_nia.c \
 	${KL10D}/kx10_disk.c
-KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT}
+
+ATT3ACCD = ${SIMHD}/3ACC
+ATT3ESS = ${ATT3ACCD}/3ess_sys.c ${ATT3ACCD}/3acc.c
+ATT3ACC_OPT = -DUSE_INT64 -DUSE_ADDR64 -I ${ATT3ACCD} ${NETWORK_OPT}
 
 ATT3B2D = ${SIMHD}/3B2
 ATT3B2M400 = ${ATT3B2D}/3b2_400_cpu.c ${ATT3B2D}/3b2_400_sys.c \
@@ -2794,6 +2798,15 @@ ${BIN}b5500${EXE} : ${B5500} ${SIM}
 	${CC} ${B5500} ${SIM} ${B5500_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${B5500D},b5500))
 	$@ $(call find_test,${B5500D},b5500) ${TEST_ARG}
+endif
+
+3ess : ${BIN}3ess${EXE}
+ 
+${BIN}3ess${EXE} : ${ATT3ESS} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${ATT3ESS} ${SIM} ${ATT3ESS_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ATT3ACCD},3acc))
+	$@ $(call find_test,${ATT3ACCD},3acc) ${TEST_ARG}
 endif
 
 3b2 : ${BIN}3b2${EXE}

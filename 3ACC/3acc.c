@@ -3,18 +3,147 @@
    Copyright 2020, Astrid Smith
 */
 
+#include <sim_defs.h>
+
 #include "3acc.h"
 
-static SIM_INLINE microcycle(struct proc *cu)
+#define MEM_SIZE              (cpu_unit.capac)
+
+t_stat cpu_reset(DEVICE* dptr);
+
+uint32 R[NUM_REGISTERS];
+/* these are the registers that are visible on the front panel.
+ * microcode internal registers are not accessible to the user.
+ */
+REG cpu_reg[] = {
+	{ ORDATAD ( R0, R[0], 18, "General purpose register 0") },
+	{ ORDATAD ( R1, R[1], 18, "General purpose register 1") },
+	{ ORDATAD ( R2, R[2], 18, "General purpose register 2") },
+	{ ORDATAD ( R3, R[3], 18, "General purpose register 3") },
+	{ ORDATAD ( R4, R[4], 18, "General purpose register 4") },
+	{ ORDATAD ( R5, R[5], 18, "General purpose register 5") },
+	{ ORDATAD ( R6, R[6], 18, "General purpose register 6") },
+	{ ORDATAD ( R7, R[7], 18, "General purpose register 7") },
+	{ ORDATAD ( R8, R[8], 18, "General purpose register 8") },
+	{ ORDATAD ( R9, R[9], 18, "General purpose register 9") },
+	{ ORDATAD ( R10, R[10], 18, "General purpose register 10") },
+	{ ORDATAD ( R11, R[11], 18, "General purpose register 11") },
+	{ ORDATAD ( R12, R[12], 18, "General purpose register 12") },
+	{ ORDATAD ( R13, R[13], 18, "General purpose register 13") },
+	{ ORDATAD ( R14, R[14], 18, "General purpose register 14") },
+	{ ORDATAD ( R15, R[15], 18, "General purpose register 15") },
+
+	{ ORDATAD ( MCTL_STAT, R[NUM_MCS], 22, "Microcontrol Status" ) },
+	{ ORDATAD ( TIM, R[NUM_TI], 0, "Timing Counter" ) },
+	{ ORDATAD ( SYS_STAT, R[NUM_SS], 18, "System Status" ) },
+	{ ORDATAD ( ST_ADRS, R[NUM_SAR], 20, "Store Address" ) },
+	{ ORDATAD ( PROG_ADRS, R[NUM_PA], 20, "Program Address" ) },
+	{ ORDATAD ( MTCE_STA, R[NUM_MS], 18, "Maintenance Status" ) },
+	{ ORDATAD ( M_MEM_STAT, R[NUM_MMSR], 22, "Main Memory Status" ) },
+	{ ORDATAD ( MCH_BUFR, R[NUM_MCHB], 0, "Maintenance Channel Buffer" ) },
+	{ ORDATAD ( INT_SET, R[NUM_IS], 16, "Interrupt Set" ) },
+	{ ORDATAD ( INT_MASK, R[NUM_IM], 0, "Interrupt Mask" ) },
+	{ ORDATAD ( HOLD_GET, R[NUM_HG], 20, "Hold-Get" ) },
+	{ ORDATAD ( ERR, R[NUM_ER], 22, "Error" ) },
+	{ ORDATAD ( DATA_MASK, R[NUM_DK], 20, "Data Mask" ) },
+	{ ORDATAD ( DATA_IN, R[NUM_DI], 20, "Data Input" ) },
+	{ ORDATAD ( ADR_MASK, R[NUM_AK], 20, "Address Mask" ) },
+	{ ORDATAD ( ADR_IN, R[NUM_AI], 20, "Address Input" ) },
+	{ NULL }
+};
+
+REG *sim_PC = &cpu_reg[20];
+
+UNIT cpu_unit = { UDATA (NULL, UNIT_FIX|UNIT_BINK|UNIT_IDLE|UNIT_DISABLE, MAXMEMSIZE ) };
+
+MTAB cpu_mod[] = {
+	{ 0 }
+};
+
+static DEBTAB cpu_deb_tab[] = {
+	{ NULL, 0, NULL }
+};
+
+DEVICE cpu_dev = {
+	"CPU",               /* Name */
+	&cpu_unit,           /* Units */
+	cpu_reg,             /* Registers */
+	cpu_mod,             /* Modifiers */
+	1,                   /* Number of Units */
+	16,                  /* Address radix */
+	16,                  /* Address width */
+	1,                   /* Addr increment */
+	16,                  /* Data radix */
+	21,                  /* Data width */
+	NULL,             /* Examine routine */ // xxx
+	NULL,            /* Deposit routine */ // xxx
+	&cpu_reset,          /* Reset routine */
+	NULL,           /* Boot routine */ // xxx
+	NULL,                /* Attach routine */
+	NULL,                /* Detach routine */
+	NULL,                /* Context */
+	DEV_DEBUG,  /* Flags */
+	0,                   /* Debug control flags */
+	cpu_deb_tab,         /* Debug flag names */
+	NULL,       /* Memory size change */
+	NULL,                /* Logical names */
+	NULL,           /* Help routine */ // xxx
+	NULL,                /* Attach Help Routine */
+	NULL,                /* Help Context */
+	NULL,     /* Device Description */
+};
+
+// microcontrol flipflops
+struct {
+	t_bool ru; // xxx ??
+	t_bool ru0, ru1, rub;
+	t_bool alo;
+	t_bool lint;
+	t_bool lnop;
+	t_bool lsir;
+	t_bool malz;
+	t_bool smint;
+	t_bool dmint;
+	t_bool bm;
+	t_bool mpsm;
+	t_bool pna;
+	t_bool inh_ck;
+	t_bool fnp;
+	t_bool rarp;
+} uff;
+
+#define UCODE_LEN 1<<12
+uint32* UCODE = NULL;
+uint32* RAM = NULL;
+
+t_stat
+cpu_reset(DEVICE* dptr)
 {
+	if (! sim_is_running) {
+		if (UCODE == NULL) {
+			UCODE = (uint32*) calloc((size_t) (UCODE_LEN >> 2), sizeof(uint32));
+		}
+		if (RAM == NULL) {
+			RAM = (uint32*) calloc((size_t)(MEM_SIZE >> 2), sizeof(uint32));
+		}
+	}
+
+	return SCPE_OK;
+}
+
+t_stat
+sim_instr(void)
+{
+	uint32 gb;
 	microinstruction mi;
 
 	// for now, the two-stage microinstruction pipeline isn't
 	// properly interleaved.  that will come.
 
 	/* **** microinstruction pipeline, stage 1 **** */
-	reg12 mar = cu->micro.mar;
-	microinstruction mir = cu->micro.mir;
+	uint32 mar = R[NUM_MAR];
+	microinstruction mir;
+	mir.q = R[NUM_MIR];
 
 	// fundamentally, this microcycle needs to decide what the Next
 	// Address should be, and load from the microstore to the MIR.
@@ -32,38 +161,39 @@ static SIM_INLINE microcycle(struct proc *cu)
 	if (mir.mi.na == 0xfff) {
 		/* all-ones detector: load the RAR into the MIR; return from
 		 * microsubroutine */
-		mar = cu->micro.rar;
-		cu->micro.ff.ru = true;
+		mar = R[NUM_RAR];
+		uff.ru = TRUE;
 	} else if (mir.mi.na == 0x000) {
 		/* return from instruction xxx */
 	}
 
-	if (cu->micro.ff.ru) {
+	if (uff.ru) {
 		/* rar update (RU flipflop) is enabled: we are not in a
 		 * microsubroutine */
-		cu->micro.rar = mar;
+		R[NUM_RAR] = mar;
 	}
 
-	if (/* complement correction required xxx */) {
+	if ( FALSE /* complement correction required xxx */) {
 		// xxx: is this the previous mir (cu->micro.mir)
 		// or the current mir (mir)?
-		cu->micro.erar = cu->micro.mir;
+		// xxx i wrote mar even though specs seem to have said mir in the past
+		R[NUM_ERAR] = R[NUM_MAR];
 		mar = 00777; // hardcoded, see sh B1GN loc E8
 	}
 
 	/* many ff's are cleared late in the microcycle, during phase P3.
 	 * cite: sh B1GH, loc F0-F8 */
-	cu->micro.ff.alo = false;
-	cu->micro.ff.lint = false;
-	cu->micro.ff.lnop = false;
-	cu->micro.ff.lsir = false;
-	cu->micro.ff.malz = false;
-	cu->micro.ff.smint = false;
+	uff.alo = FALSE;
+	uff.lint = FALSE;
+	uff.lnop = FALSE;
+	uff.lsir = FALSE;
+	uff.malz = FALSE;
+	uff.smint = FALSE;
 
     // ==== PHASE 3
 	// "microstore output stable", sh b1gc
-	mir.q = cu->micro.ucode[mar];
-	cu->micro.mar = mar;
+	mir.q = UCODE[mar];
+	R[NUM_MAR] = mar;
 
 	/* **** microinstruction pipeline, stage 2 **** */
 
@@ -73,65 +203,65 @@ static SIM_INLINE microcycle(struct proc *cu)
 	 * ==== CLOCK PHASE 0 START ====
 	 */
 
-#define GB18(from) cu->gb = from
-#define GB22(from) cu->gb = from
+#define GB18(from) gb = from
+#define GB22(from) gb = from
 
 	/* == from field decoder ==
 	 * ref. sd-1c900-01 sh D13 (note 312)
 	 */
-	switch (mir.mi.from) {
+	switch ((uint8_t)mir.mi.from) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // f1o4l1+f3o4r7 (B1GB)
 		// RAR(0-11) => GB(8-19)
 		// [zeros in GB(0-7)]
-		cu->gb = cu->micro.rar << 8;
+		gb = R[NUM_RAR] << 8;
 		break;
 	case 0x1b: // spare
 		break;
 	case 0x1d: // spare, sir1
 		break;
 	case 0x1e: // sir0 => gb(18)
-		GB18(cu->memctl.sir);
+		GB18(R[NUM_SIR]);
 		break;
 	case 0x27: // mchc(0-7) => gb(0-7)
-		cu->gb = cu->mch.mchc & 0xff;
+		gb = R[NUM_MCHC] & 0xff;
 		break;
 	case 0x2b: // spare
 		break;
 	case 0x2d: // spare, sdr1
 		break;
 	case 0x2e: // sdr0 => gb (18)
-		GB18(cu->memctl.sdr);
+		GB18(R[NUM_SDR]);
 		break;
 	case 0x47: // r12 => gb (18)
-		GB18(cu->r[12]);
+		GB18(R[12]);
 		break;
 	case 0x4d: // r14 => gb (18)
-		GB18(cu->r[14]);
+		GB18(R[14]);
 		break;
 	case 0x4e: // r15 => gb (18)
-		GB18(cu->r[15]);
+		GB18(R[15]);
 		break;
 	case 0x87: // im  [mr12] => gb (18)
-		GB18(cu->interrupt.im);
+		GB18(R[NUM_IM]);
 		break;
 	case 0x8b: // is(0-15) [mr13] => gb(0-15)
-		cu->gb = cu->interrupt.is;
+		gb = R[NUM_IS] & 0xffff;
 		break;
 	case 0x8d: // ms [mr14] => gb (18)
-		GB18(cu->miscreg.ms);
+		GB18(R[NUM_MS]);
 		break;
 	case 0x8e: // ss [mr15] => gb (18)
-		GB18(cu->miscreg.ss);
+		GB18(R[NUM_SS]);
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
 
 	case 0x33: // cr => gb (22)
-		GB22(cu->miscreg.cr);
+		GB22(R[NUM_CR]);
 		break;
 	case 0x35: // hg => gb (18)
-		GB18(cu->miscreg.hg);
+		GB18(R[NUM_HG]);
 		break;
 	case 0x36: // misc dec row 2
 	case 0x39: // misc dec row 3
@@ -139,41 +269,41 @@ static SIM_INLINE microcycle(struct proc *cu)
 	case 0x3c: // misc dec row 5
 		goto misc_dec;
 	case 0x53: // r0 => gb (18)
-		GB18(cu->r[0]);
+		GB18(R[0]);
 		break;
 	case 0x55: // r1 => gb (18)
-		GB18(cu->r[1]);
+		GB18(R[1]);
 		break;
 	case 0x56: // r2 => gb (18)
-		GB18(cu->r[2]);
+		GB18(R[2]);
 		break;
 	case 0x59: // r3 => gb (18)
-		GB18(cu->r[3]);
+		GB18(R[3]);
 		break;
 	case 0x5a: // r4 => gb (18)
-		GB18(cu->r[4]);
+		GB18(R[4]);
 		break;
 	case 0x5c: // r5 => gb (18)
-		GB18(cu->r[5]);
+		GB18(R[5]);
 		break;
 
 	case 0x63: // r6 => gb (18)
-		GB18(cu->r[6]);
+		GB18(R[6]);
 		break;
 	case 0x65: // r7 => gb (18)
-		GB18(cu->r[7]);
+		GB18(R[7]);
 		break;
 	case 0x66: // r8 => gb (18)
-		GB18(cu->r[8]);
+		GB18(R[8]);
 		break;
 	case 0x69: // r9 => gb (18)
-		GB18(cu->r[9]);
+		GB18(R[9]);
 		break;
 	case 0x6a: // r10 => gb (18)
-		GB18(cu->r[10]);
+		GB18(R[10]);
 		break;
 	case 0x6c: // r11 => gb (18)
-		GB18(cu->r[11]);
+		GB18(R[11]);
 		break;
 
 	case 0x93: // ti [mr0] => gb (16)
@@ -182,38 +312,38 @@ static SIM_INLINE microcycle(struct proc *cu)
 		// xxx
 		break;
 	case 0x95: // sar [mr1] => gb (22)
-		GB22(cu->memctl.sar);
+		GB22(R[NUM_SAR]);
 		break;
 	case 0x96: // pa [mr2] => gb (22)
-		GB22(cu->miscreg.pa);
+		GB22(R[NUM_PA]);
 		break;
 	case 0x99: // mchb [mr3] => gb (22)
-		GB22(cu->mch.mchb);
+		GB22(R[NUM_MCHB]);
 		break;
 	case 0x9a: // mms [mr4] => gb (12, pl, ph)
 		// B4GB loc C0
-		GB18(cu->memctl.mms & 0xfff);
+		GB18(R[NUM_MMSR] & 0xfff);
 		break;
 	case 0x9c: // ak [mr5] => gb (22)
-		GB22(cu->panel.ak);
+		GB22(R[NUM_AK]);
 		break;
 
 	case 0xa3: // ai [mr6] => gb (22)
-		GB22(cu->panel.ai);
+		GB22(R[NUM_AI]);
 		break;
 	case 0xa5: // dk [mr9] => gb (18)
-		GB18(cu->panel.dk);
+		GB18(R[NUM_DK]);
 		break;
 	case 0xa6: // di [mr8] => gb (18)
-		GB18(cu->panel.di);
+		GB18(R[NUM_DI]);
 		break;
 	case 0xa9: // db [mr9] => gb (22)
-		GB22(cu->panel.db);
+		GB22(R[NUM_DB]);
 		break;
 	case 0xaa: // er [mr10] => gb (22)
 		// bus parity needs inhibit?
 		// XXX
-		GB22(cu->miscreg.er);
+		GB22(R[NUM_ER]);
 		break;
 	case 0xac: // spare [mr11]
 		break;
@@ -237,12 +367,12 @@ static SIM_INLINE microcycle(struct proc *cu)
 		/* next 16 listed are 3o4 L and 1o4 R */
 
 	case 0x71: // ar => gb (22)
-		GB22(cu->dml[0].ar)
+		GB22(R[NUM_AR0]);
 		break;
 	case 0x72: // spare
 		break;
 	case 0x74: // mcs => gb (22)
-		GB22(cu->micro.mcs);
+		GB22(R[NUM_MCS]);
 		break;
 	case 0x78: // spare
 		break;
@@ -284,7 +414,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		// xxx
 		break;
 	case 0xe2: // br => gb (22)
-		GB22(cu->dml.br);
+		GB22(R[NUM_BR0]);
 		break;
 	case 0xe4: // really also complicated
 		// xxx
@@ -305,16 +435,16 @@ static SIM_INLINE microcycle(struct proc *cu)
 		}
 	}
 
-#undefine GB18
-#undefine GB22
+#undef GB18
+#undef GB22
 
 	/* == to field decoder ==
 	 * ref: sd-1c900-01 sh D13 (note 312)
 	 */
-#define GB18(to) to = cu->gb
-#define GB22(to) to = cu->gb
+#define GB18(to) to = gb
+#define GB22(to) to = gb
 
-	switch (mir.mi.to) {
+	switch ((uint8_t)mir.mi.to) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // gb(8-19,ph) => rar(0-11,ph) (B1GB)
 		// xxx
@@ -333,22 +463,22 @@ static SIM_INLINE microcycle(struct proc *cu)
 		// xxx
 		break;
 	case 0x47: // gb => r12 (18)
-		GB18(cu->r[12]);
+		GB18(R[12]);
 		break;
 	case 0x4d: // gb => r14 (18)
-		GB18(cu->r[14]);
+		GB18(R[14]);
 		break;
 	case 0x4e: // gb => r15 (18)
-		GB18(cu->r[15]);
+		GB18(R[15]);
 		break;
 	case 0x87: // gb => im [mr12] (18)
-		GB18(cu->interrupt.im);
+		GB18(R[NUM_IM]);
 		break;
 	case 0x8b: // gb => ss_cl [mr13] (22)
 		// xxx
 		break;
 	case 0x8d: // gb => ms [mr14]
-		GB18(cu->miscreg.ms);
+		GB18(R[NUM_MS]);
 		break;
 	case 0x8e: // gb => ss_st [mr15] (22)
 		// xxx
@@ -357,10 +487,10 @@ static SIM_INLINE microcycle(struct proc *cu)
 		/* next 36 listed are 2o4 L and 2o4 R */
 
 	case 0x33: // gb => cr (22)
-		GB22(cu->miscreg.cr);
+		GB22(R[NUM_CR]);
 		break;
 	case 0x35: // gb => hg (18)
-		GB18(cu->miscreg.hg);
+		GB18(R[NUM_HG]);
 		break;
 	case 0x36: // gb => is_cl (18)
 		// xxx
@@ -373,75 +503,75 @@ static SIM_INLINE microcycle(struct proc *cu)
 		goto misc_dec;
 
 	case 0x53: // gb => r0 (18)
-		GB18(cu->r[0]);
+		GB18(R[0]);
 		break;
 	case 0x55: // gb => r1 (18)
-		GB18(cu->r[1]);
+		GB18(R[1]);
 		break;
 	case 0x56: // gb => r2 (18)
-		GB18(cu->r[2]);
+		GB18(R[2]);
 		break;
 	case 0x59: // gb => r3 (18)
-		GB18(cu->r[3]);
+		GB18(R[3]);
 		break;
 	case 0x5a: // gb => r4 (18)
-		GB18(cu->r[4]);
+		GB18(R[4]);
 		break;
 	case 0x5c: // gb => r5 (18)
-		GB18(cu->r[5]);
+		GB18(R[5]);
 		break;
 
 	case 0x63: // gb => r6 (18)
-		GB18(cu->r[6]);
+		GB18(R[6]);
 		break;
 	case 0x65: // gb => r7 (18)
-		GB18(cu->r[7]);
+		GB18(R[7]);
 		break;
 	case 0x66: // gb => r8 (18)
-		GB18(cu->r[8]);
+		GB18(R[8]);
 		break;
 	case 0x69: // gb => r9 (18)
-		GB18(cu->r[9]);
+		GB18(R[9]);
 		break;
 	case 0x6a: // gb => r10 (18)
-		GB18(cu->r[10]);
+		GB18(R[10]);
 		break;
 	case 0x6c: // gb => r11 (18)
-		GB18(cu->r[11]);
+		GB18(R[11]);
 		break;
 
 	case 0x93: // gb => mchtr [mr0] (22)
-		GB22(cu->mch.mchtr);
+		GB22(R[NUM_MCHTR]);
 		break;
 	case 0x95: // gb => sar [mr1] (22)
-		GB22(cu->memctl.sar);
+		GB22(R[NUM_SAR]);
 		break;
 	case 0x96: // gb => pa [mr2] (22)
-		GB22(cu->memctl.pa);
+		GB22(R[NUM_PA]);
 		break;
 	case 0x99: // gb => mchb [mr3] (22)
-		GB22(cu->mch.mchb);
+		GB22(R[NUM_MCHB]);
 		break;
 	case 0x9a: // spare
 		break;
 	case 0x9c: // gb => ak [mr5] (22)
-		GB22(cu->panel.ak);
+		GB22(R[NUM_AK]);
 		break;
 
 	case 0xa3: // gb => ai [mr6] (22)
-		GB22(cu->panel.ai);
+		GB22(R[NUM_AI]);
 		break;
 	case 0xa5: // gb => dk [mr7] (18)
-		GB18(cu->panel.dk);
+		GB18(R[NUM_DK]);
 		break;
 	case 0xa6: // gb => di [mr8] (18)
-		GB18(cu->panel.di);
+		GB18(R[NUM_DI]);
 		break;
 	case 0xa9: // gb => db [mr0] (22)
-		GB22(cu->panel.db);
+		GB22(R[NUM_DB]);
 		break;
 	case 0xaa: // gb => er [mr10] (22)
-		GB22(cu->miscreg.er);
+		GB22(R[NUM_ER]);
 		break;
 	case 0xac: // gb => dbc [mr11] (22)
 		// xxx
@@ -466,7 +596,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 		/* next 16 listed are 3o4 L and 1o4 R */
 
 	case 0x71: // gb => br (22)
-		GB22(cu->dml[0].br);
+		GB22(R[NUM_BR0]);
 		// B2GM loc g0: inh parity
 		break;
 	case 0x72: // complex gating
@@ -480,7 +610,7 @@ static SIM_INLINE microcycle(struct proc *cu)
 
 	case 0xb1: // gb => ar (22)
 		// B2GM loc g0: inh parity
-		GB22(cu->dml[0].ar);
+		GB22(R[NUM_AR0]);
 		break;
 	case 0xb2: // gb => ar0 (22)
 		// xxx
@@ -532,8 +662,9 @@ static SIM_INLINE microcycle(struct proc *cu)
 	/* == miscellaneous decoder ==
 	 * ref: sd-1c900-01 sh D14 (note 313)
 	 */
-misc_decoder:
-	uint32 decode_pt = mir.mi.from << 8 + mir.mi.to;
+misc_dec:
+	{
+	uint32_t decode_pt = mir.mi.from << 8 + mir.mi.to;
 
 	/* xxx concerned that this switch might be slow */
 	switch (decode_pt) {
@@ -584,7 +715,7 @@ misc_decoder:
 	case 0xe8ca: break; // ty xxx
 	case 0xe8c9: break; // tx xxx
 	case 0xe81b: break; // zru (B1GB) xxx
-		cu->micro.ff.ru0 = false;
+		uff.ru0 = FALSE;
 		// clear ru
 
 // row 2, 36
@@ -729,13 +860,14 @@ misc_decoder:
 	case 0xcacc: break; // sseiz xxx
 	case 0xcaca: // br => mms xxx
 		// B4GB, loc B0 & B5
-		cu->memctl.mms = cu->dml[0].br & 0xfff;
+		R[NUM_MMSR] = R[NUM_BR0] & 0xfff;
 		break;
 	case 0xcac9: break; // erar => mar xxx
 		// perform an error microsubroutine by gating erar => mar
 		// erarmar00: b1gb, loc d4
 		// b1gd, loc g1
 	case 0xca1b: break; // sbpc xxx
+	}
 	}
 
 	/* ==== CLOCK PHASE 1 START ==== */
@@ -755,4 +887,6 @@ misc_decoder:
 	/* ==== CLOCK PHASE 3 START ==== */
 	/* ==== CLOCK PHASE 3 START ==== */
 
+
+	return SCPE_OK;
 }
