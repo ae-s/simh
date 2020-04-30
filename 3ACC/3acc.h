@@ -19,7 +19,7 @@ typedef uint32_t reg16;
 typedef uint32_t reg20;
 
 /* register numbers, after the 16 general purpose registers */
-// xxx get the actual numbers
+// xxx get the actual numbers - are those the [mrXX] numbers in 1c900?
 #define NUM_AI 31
 #define NUM_AK 30
 #define NUM_DI 29
@@ -67,30 +67,43 @@ typedef uint32_t reg20;
 
 #define MAXMEMSIZE 2<<20
 
-#define NBIT(pos) 2<<pos
+#define NBIT(pos) 1<<pos
+#define REGBITS_16(REG, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, N10, N11, N12, N13, N14, N15, PL, PH) \
+        static const int REG ## _ ##  N0 = NBIT( 0); \
+        static const int REG ## _ ##  N1 = NBIT( 1); \
+        static const int REG ## _ ##  N2 = NBIT( 2); \
+        static const int REG ## _ ##  N3 = NBIT( 3); \
+        static const int REG ## _ ##  N4 = NBIT( 4); \
+        static const int REG ## _ ##  N5 = NBIT( 5); \
+        static const int REG ## _ ##  N6 = NBIT( 6); \
+        static const int REG ## _ ##  N7 = NBIT( 7); \
+        static const int REG ## _ ##  N8 = NBIT( 8); \
+        static const int REG ## _ ##  N9 = NBIT( 9); \
+        static const int REG ## _ ## N10 = NBIT(10); \
+        static const int REG ## _ ## N11 = NBIT(11); \
+        static const int REG ## _ ## N12 = NBIT(12); \
+        static const int REG ## _ ## N13 = NBIT(13); \
+        static const int REG ## _ ## N14 = NBIT(14); \
+        static const int REG ## _ ## N15 = NBIT(15); \
+        static const int REG ## _ ## PL = NBIT(16);  \
+        static const int REG ## _ ## PH = NBIT(17);
+#define REGBITS_HI(REG, N16, N17, N18, N19, PL, PH)  \
+        static const int REG ## _ ## N16 = NBIT(16); \
+        static const int REG ## _ ## N17 = NBIT(17); \
+        static const int REG ## _ ## N18 = NBIT(18); \
+        static const int REG ## _ ## N19 = NBIT(19); \
+        static const int REG ## _ ## PL = NBIT(20);  \
+        static const int REG ## _ ## PH = NBIT(21);
+
+
 // masking constants for the SS register
-static const int SR_SS_AME =    NBIT( 0);
-static const int SR_SS_BHC =    NBIT( 1);
-static const int SR_SS_BIN =    NBIT( 2);
-static const int SR_SS_BTC =    NBIT( 3);
-static const int SR_SS_DME =    NBIT( 4);
-static const int SR_SS_HLT =    NBIT( 5);
-static const int SR_SS_ISC1 =   NBIT( 6);
-static const int SR_SS_ISC2 =   NBIT( 7);
-static const int SR_SS_LOF =    NBIT( 8);
-static const int SR_SS_LON =    NBIT( 9);
-static const int SR_SS_MAN =    NBIT(10);
-static const int SR_SS_MINT =   NBIT(11);
-static const int SR_SS_CC =     NBIT(12);
-static const int SR_SS_REJ =    NBIT(13);
-static const int SR_SS_STOP =   NBIT(14);
-static const int SR_SS_DISA =   NBIT(15);
-static const int SR_SS_PRI =    NBIT(16);
-static const int SR_SS_DISP =   NBIT(17);
-static const int SR_SS_BPC =    NBIT(18);
-static const int SR_SS_IPLTRK = NBIT(19);
-static const int SR_SS_CC0 =    NBIT(20);
-static const int SR_SS_CC1 =    NBIT(21);
+REGBITS_16(SR_SS,
+           AME, BHC, BIN, BTC,
+           DME, HLT, ISC1, ISC2,
+           LOF, LON, MAN, MAINT,
+           CC, REJ, STOP, DISA, x1, x2);
+REGBITS_HI(SR_SS,
+           PRI, DISP, BPC, IPLTRK, CC0, CC1);
 
 // masking constants for the MCS register
 static const int MCS_CF =  NBIT( 0);
