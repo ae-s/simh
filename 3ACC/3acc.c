@@ -5,11 +5,16 @@
 
 #include <sim_defs.h>
 
+#include <assert.h>
+
 #include "3acc.h"
+#include "parity.h"
 
 #define MEM_SIZE              (cpu_unit.capac)
 
 t_stat cpu_reset(DEVICE* dptr);
+t_stat mchmsg_cmd(int32 arg, const char* buf);
+uint32 mchmsg(uint32 msg);
 
 uint32 R[NUM_REGISTERS];
 /* these are the registers that are visible on the front panel.
@@ -57,6 +62,8 @@ REG cpu_reg[] = {
     // xxx
 	{ NULL }
 };
+
+static uint32 gb;
 
 REG *sim_PC = &cpu_reg[20];
 
@@ -128,6 +135,109 @@ uint16  mar_jam = 0;
     (uint32) (ca<<32 | cb<<31 | pta<<30 | pna<<29 | \
             na<<16 | to<<8 | from)
 
+CTAB cmds[] = {
+	{ "mch", mchmsg_cmd, 0,
+	  "send maintenance channel message" },
+	{ NULL }
+};
+
+t_stat
+mchmsg_cmd(int32 arg, const char* buf)
+{
+	uint32 result;
+	uint32 msg;
+
+	msg = strtol(buf, NULL, 16);
+	printf("send mch msg %#x ...\n", (unsigned int) msg);
+	result = mchmsg(msg);
+	printf("result: %#x\n", (unsigned int) result);
+	return SCPE_OK;
+}
+
+uint32
+mchmsg(uint32 msg)
+{
+	uint8 mcc = msg & 0xff;
+	R[NUM_MCHTR] = msg >> 8;
+
+	/* see sh B9GJ */
+	switch (mcc) {
+	case 0x65: // cler
+		// xxx
+		break;
+	case 0x35: // clmsr
+		// xxx
+		break;
+	case 0xc5: // clpt
+		// xxx
+		break;
+	case 0x2d: // cltto
+		// xxx
+		break;
+	case 0xa5: // disa
+		// xxx
+		break;
+	case 0xe1: // disb
+		// xxx
+		break;
+	case 0x47: // initclk
+		// xxx
+		break;
+	case 0x4d: // ldmar
+		// xxx
+		break;
+	case 0x99: // ldmchb
+		R[NUM_MCHB] = R[NUM_MCHTR];
+		break;
+	case 0x8d: // ldmirh
+		// xxx
+		break;
+	case 0x1d: // ldmirl
+		// (xxx, check that this is actually 1d)
+		// xxx
+		break;
+	case 0xc9: // mstart
+		// xxx
+		break;
+	case 0xd1: // mstop
+		// xxx
+		break;
+	case 0x8b: // rtner
+		// xxx
+		break;
+	case 0xa3: // rtnmb
+		// xxx
+		break;
+	case 0xb1: // rtnmchb
+		R[NUM_MCHTR] = R[NUM_MCHB];
+		break;
+	case 0x55: // rtnmmh
+		// xxx
+		break;
+	case 0x95: // rtnmml
+		// xxx
+		break;
+	case 0x93: // rtnss
+		// xxx
+		break;
+	case 0x17: // spclk
+		// xxx
+		break;
+	case 0xc3: // stclk
+		// xxx
+		break;
+	case 0x0f: // switch
+		// xxx
+		break;
+	case 0x27: // togclk
+		// xxx
+		break;
+	default: break;
+	}
+
+	return mcc | (R[NUM_MCHTR] << 8);
+}
+
 // handwritten boot microcode, from a textual description, in leiu of
 // a dump which hasn't been made yet.
 void
@@ -137,10 +247,11 @@ load_stub_ucode(void)
     pos = 0277;
 
     // ZRU i guess
-    UCODE[pos++] = UOP(0, 0, 0, 0, pos+1, 0x81, 0xeb); 
+    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x81, 0xeb); 
+
+    // microcode checklist copied from PK-1C900 page B21
 
     // (a) Initialize RAR.
-    // xxx
     // (b) Save SS —> AI.
     UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xa3, 0x8e);
     // (c) Clear MRFMCH INHIBIT FF and decoder maintenance status.
@@ -150,13 +261,28 @@ load_stub_ucode(void)
     // (g) Save: PA —> AK, IS —> DI, IM --> DK.
     // (h) Set interrupt mask to allow panel and other CC interrupts only.
     // (i) Zero the opcode FIL and I bits.
+    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xcc); // zopf
+    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xca); // zi
+    
     // (j) Zero SS register bits AME, DME, HLT, DISP, REJ, and SP2.
     // (k) Clear the IS.
     // (l) Set the main memory status register equal to 3CB0.
     // (m) If the RESET CKT FF equals 1, zero the BIN FF, zero the CC FF, and go to the HALT loop. If the RESET CKT FF equals 0, go to (n) .
     // (n) Enable I/O and then send a main store initialization message twice.
-    // (o) If the ISC1 equal to 0, set ISC1 equal to 1 and begin the main memory initialization program at location 20 hex (U0 octal) If the ISC1 equals 1, idle the maintenance channel switch sequencer and proceed to (p)
+    // (o) If the ISC1 equal to 0, set ISC1 equal to 1 and begin the main memory initialization program at location 20 hex (40 octal) If the ISC1 equals 1, idle the maintenance channel switch sequencer and proceed to (p)
+    // (p) If ISC2 equals 0, set ISC2 equal to 1, set ISC1 equal to and stop and switch to other CC. If ISC2 equals 1, SS —> BR and reload main memory from tape (IPL SEQ).
 }
+
+/* MRF Logic: sd-1c900-01 sh b7gh */
+void cpu_hmrf(void) { mar_jam = 0277; }
+
+/* sd-1c900-01 sh b1gd */
+void cpu_stop(void) { mar_jam = 0377; }
+
+/* sd-1c900-01 sh b1gd */
+void cpu_complement_correction(void) { mar_jam = 0777; }
+
+/* xxx interrupt: jam with 0120 (sh b1gd) */
 
 t_stat
 cpu_reset(DEVICE* dptr)
@@ -166,25 +292,35 @@ cpu_reset(DEVICE* dptr)
 			RAM = (uint32*) calloc((size_t)(MEM_SIZE >> 2), sizeof(uint32));
 		}
         load_stub_ucode();
+
+		sim_vm_cmd = cmds;
 	}
 
-    /* MRF Logic :
-     * sd-1c900-01 sh b7gh
-     */
-	mar_jam = 0277;
-    
-
+    cpu_hmrf();
 	return SCPE_OK;
 }
 
 t_stat
 sim_instr(void)
 {
-	uint32 gb;
-	microinstruction mi;
+	/*
+	 * [ /!\ ] notice
+	 *
+	 * this function presently performs one microcycle before exiting.
+	 * a microcycle consists of four clock phases, 0 1 2 3.  at all
+	 * times there is a microinstruction (uop) fetch being prepared at
+	 * the same time that the previous uop is being executed.
+	 *
+	 * in other words, there is a two-stage microinstruction pipeline,
+	 * which is interleaved into this code among the four-phase
+	 * machine cycle.
+	 */
 
-	// for now, the two-stage microinstruction pipeline isn't
-	// properly interleaved.  that will come.
+	/* ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 * ==== CLOCK PHASE 0 START ====
+	 */
 
 	/* **** microinstruction pipeline, stage 1 **** */
 	static uint32 mar;
@@ -192,8 +328,13 @@ sim_instr(void)
 	mar = R[NUM_MAR];
 	mir.q = R[NUM_MIR];
 
-	// fundamentally, this microcycle needs to decide what the Next
-	// Address should be, and load from the microstore to the MIR.
+	/* the first stage of the uop pipeline is "determine address of
+	 * next uop".  segments of the code demarked by "stage 1" will
+	 * concern:
+	 *
+	 * - decide what the Next Address is
+	 * - load the MicroInstruction Register from the Next Address
+	 */
 
 	if (mir.mi.ca == 1) {
 		/* the CA bit means "increment the address instead of loading
@@ -211,7 +352,8 @@ sim_instr(void)
 		mar = R[NUM_RAR];
 		uff.ru = TRUE;
 	} else if (mir.mi.na == 0x000) {
-		/* return from instruction xxx */
+		/* return from instruction */
+		// xxx
 	}
 
 	if (uff.ru) {
@@ -234,11 +376,8 @@ sim_instr(void)
 
 	/* **** microinstruction pipeline, stage 2 **** */
 
-	/* ==== CLOCK PHASE 0 START ====
-	 * ==== CLOCK PHASE 0 START ====
-	 * ==== CLOCK PHASE 0 START ====
-	 * ==== CLOCK PHASE 0 START ====
-	 */
+	/* sh b1gj loc d2 */
+	uff.malz = ((mir.mi.na == 0));
 
 #define GB18(from) gb = from
 #define GB22(from) gb = from
@@ -477,6 +616,8 @@ sim_instr(void)
 #undef GB18
 #undef GB22
 
+	
+
 	/* == to field decoder ==
 	 * ref: sd-1c900-01 sh D13 (note 312)
 	 */
@@ -636,7 +777,7 @@ sim_instr(void)
 
 	case 0x71: // gb => br (22)
 		GB22(R[NUM_BR0]);
-		// B2GM loc g0: inh parity
+		// B2GM loc g0: inh parity xxx
 		break;
 	case 0x72: // complex gating
 		// xxx
@@ -704,8 +845,8 @@ sim_instr(void)
 	 * ref: sd-1c900-01 sh D14 (note 313)
 	 */
 misc_dec:
-	{
-                uint32_t decode_pt = mir.w[0];
+	;
+	uint32_t decode_pt = mir.w[0];
 
 	/* xxx concerned that this switch might be slow */
 	switch (decode_pt) {
@@ -714,10 +855,14 @@ misc_dec:
 	case 0xd827: break; // spare
 	case 0xd82b: break; // pymch xxx
 		// gate bits from br to mchtr
-	case 0xd82d: break; // hmrf xxx
+	case 0xd82d: // hmrf
 		// hardware initialize the 3a cc
+        cpu_hmrf();
+        break;
 	case 0xd81d: break; // tmch xxx
 		// test the mch
+        // gate MCH status to the C register
+        // see MDTMCH0 on sh B9GE loc A4
 	case 0xd8d8: break; // idlmch xxx
 		// idle the mch
 	case 0xd8b8: break; // stmch xxx
@@ -737,8 +882,10 @@ misc_dec:
 
 // row 1, e8
 	case 0xe827: break; // spare
-	case 0xe82b: break; // zer xxx
+	case 0xe82b: // zer
 		// clear the error register
+        R[NUM_ER] = 0;
+        break;
 	case 0xe82d: break; // zmint xxx
 		// clear the microinterpret bit
 	case 0xe81d: break; // iocc xxx
@@ -755,9 +902,11 @@ misc_dec:
 		// test dr
 	case 0xe8ca: break; // ty xxx
 	case 0xe8c9: break; // tx xxx
-	case 0xe81b: break; // zru (B1GB) xxx
-		uff.ru0 = FALSE;
+	case 0xe81b: // zru (B1GB)
 		// clear ru
+        // xxx
+		uff.ru0 = FALSE;
+        break;
 
 // row 2, 36
 	case 0x3627: break; // spare
@@ -777,8 +926,11 @@ misc_dec:
 		// idle io serial channel
 	case 0x363a: break; // spare
 	case 0x363c: break; // ttr1 xxx
-	case 0x36cc: break; // ds => cf xxx
-		// gate ds to cf
+	case 0x36cc: // ds => cf
+		// gate ds flag to cf
+		R[NUM_MCS] &= ~REG_MCS_CF;
+		R[NUM_MCS] |= (R[NUM_MCS] & REG_MCS_DS) >> 1;
+		break;
 	case 0x36ca: break; // tds xxx
 	case 0x36c9: break; // tcf xxx
 		// test cf
@@ -816,8 +968,10 @@ misc_dec:
 // row 4, 3a
 	case 0x3a27: break; // spare
 	case 0x3a2b: break; // spare
-	case 0x3a2d: break; // mchb => mchtr xxx
+	case 0x3a2d: // mchb => mchtr
 		// gate mchb to mchtr [mdcmcbtr0]
+		R[NUM_MCHTR] = R[NUM_MCHB];
+		break;
 	case 0x3a1d: break; // s3db xxx
 		// gate switch register 3 to db
 	case 0x3ad8: break; // rar => fn xxx
@@ -909,27 +1063,31 @@ misc_dec:
 		// b1gd, loc g1
 	case 0xca1b: break; // sbpc xxx
 	}
-	}
 
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 
+	/* **** microinstruction pipeline, stage 1 **** */
+	/* **** microinstruction pipeline, stage 2 **** */
+
 	/* ==== CLOCK PHASE 2 START ==== */
 	/* ==== CLOCK PHASE 2 START ==== */
 	/* ==== CLOCK PHASE 2 START ==== */
 	/* ==== CLOCK PHASE 2 START ==== */
 
-	
+	/* **** microinstruction pipeline, stage 1 **** */
+	/* **** microinstruction pipeline, stage 2 **** */
 
 	/* ==== CLOCK PHASE 3 START ==== */
 	/* ==== CLOCK PHASE 3 START ==== */
 	/* ==== CLOCK PHASE 3 START ==== */
 	/* ==== CLOCK PHASE 3 START ==== */
 
+	/* **** microinstruction pipeline, stage 1 **** */
     // microinstruction pipeline, stage 1
-    // ==== PHASE 3
+
 	/* many ff's are cleared late in the microcycle, during phase P3.
 	 * cite: sh B1GH, loc F0-F8 */
 	uff.alo = FALSE;
@@ -946,6 +1104,8 @@ misc_dec:
 	R[NUM_MAR] = mar;
 
     mar_jam = 0;
+
+	/* **** microinstruction pipeline, stage 2 **** */
 
 	return SCPE_OK;
 }

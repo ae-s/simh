@@ -95,25 +95,72 @@ typedef uint32_t reg20;
         static const int REG ## _ ## PL = NBIT(20);  \
         static const int REG ## _ ## PH = NBIT(21);
 
+#define REGBITS_20(REG, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, N10, N11, N12, N13, N14, N15, N16, N17, N18, N19, PL, PH) \
+    REGBITS_16(REG, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, N10, N11, N12, N13, N14, N15, xxxl, xxxh); \
+    REGBITS_HI(REG, N16, N17, N18, N19, PL, PH);
 
 // masking constants for the SS register
-REGBITS_16(SR_SS,
+// for details see sd-1c900-01 sh b5gg
+REGBITS_20(SR_SS,
            AME, BHC, BIN, BTC,
            DME, HLT, ISC1, ISC2,
            LOF, LON, MAN, MAINT,
-           CC, REJ, STOP, DISA, x1, x2);
-REGBITS_HI(SR_SS,
-           PRI, DISP, BPC, IPLTRK, CC0, CC1);
+           CC, REJ, STOP, DISA,
+           PRI, DISP, BPC, IPLTRK, 
+           CC0, CC1);
 
 // masking constants for the MCS register
-static const int MCS_CF =  NBIT( 0);
-static const int MCS_DS =  NBIT( 1);
-static const int MCS_TR1 = NBIT( 2);
-static const int MCS_TR2 = NBIT( 3);
-static const int MCS_DR =  NBIT( 4);
-static const int MCS_RU =  NBIT( 5);
-static const int MCS_IFF = NBIT( 6);
-static const int MCS_OPF = NBIT( 7);
+static const int REG_MCS_CF =  NBIT( 0);
+static const int REG_MCS_DS =  NBIT( 1);
+static const int REG_MCS_TR1 = NBIT( 2);
+static const int REG_MCS_TR2 = NBIT( 3);
+static const int REG_MCS_DR =  NBIT( 4);
+static const int REG_MCS_RU =  NBIT( 5);
+static const int REG_MCS_IFF = NBIT( 6);
+static const int REG_MCS_OPF = NBIT( 7);
+
+// masking constants for the ER register
+REGBITS_20(SR_ER,
+        T4o8, F4o8, // 4-of-8 decode errors
+        IBPL, // bad low parity in IB register
+        GBPT, // bad parity on gating bus
+        DML,
+        MARPT, // bad parity in MAR
+        CLK, // clock error
+        S0ERA, // store 0 (my), error A
+        MARMT, // MAR matcher
+        FNPT, // dml function register
+        SERC, // any store, err C (bad parity)
+        S0ERB, // store 0 (my), err B (write protect)
+        S0TO, // store 0 (my), fast timeout, 38-50us
+        BACK, // branch allow check fail
+        S1ERB, // store 1 (other), err B (write protect)
+        S1ERA, // store 1 (other), err A
+        S1TO, // store 1 (other), fast timeout, 38-50us
+        IOCS, // io main channel select error
+        MCHPT, // program timer expiry
+        MCHMR, // switch error received by online cc
+        IOH, // io channel error
+        IOPT // io parity error
+           );
+
+// masking constants for the interrupt register
+// see sd-1c900-01 sh b5ge
+REGBITS_16(SR_INTS,
+        S0, // spares
+        UTIL, // utility & test
+        S2,
+        PANMT, // panel match
+        S4,
+        CCER, // cc error
+        S6,
+        OCCI, // other cc interrupt
+        S8, S9,
+        TTYE, TTYO, // tty even & odd
+        S12,
+        PANL, // panel (key?)
+        S14, S15,
+        PL, PH);
 
 typedef union {
 	struct {
