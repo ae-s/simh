@@ -32,15 +32,15 @@
 /* Because of the pervasive parity checking in this processor, data
  * paths are the next size up from what they might seem to require.
  */
-#define M_PH 0x20000;
-#define M_PL 0x10000;
-#define M_R16 0xffff;
-#define M_R12 0xfff;
+#define M_R16 0xffff
+#define M_R12 0xfff
 
 /* is this how addresses work? */
-#define M_R20  0xfffff;
-#define M_RPH 0x200000;
-#define M_RPL 0x100000;
+#define M_R20  0xfffff
+
+// bits 20 and 21 are always parity
+#define M_PH 0x200000
+#define M_PL 0x100000
 typedef uint16_t reg8;
 typedef uint16_t reg12;
 typedef uint32_t reg16;

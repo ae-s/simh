@@ -209,8 +209,9 @@ mchmsg(uint32 msg)
 		// (xxx, check that this command is actually 0x1d; the print was not clear)
 		// 1. load low 16 of mir from mchb
 		R[NUM_MIR] &= 0xffff0000;
-		R[NUM_MIR] |= R[NUM_MCHB] & 0xffff;
+		R[NUM_MIR] |= R[NUM_MCHTR] & 0xffff;
 		// 2. run decoders
+		// xxx decoders, or a full machine cycle?
 		seg1_p0();
 		break;
 	case MCH_MSTART:
@@ -662,7 +663,7 @@ seg1_p0(void) {
 #define GB18(to) to = gb
 #define GB22(to) to = gb
 
-	switch ((uint8_t)mir.mi.to) {
+	switch ((uint8_t)mymir.mi.to) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // gb(8-19,ph) => rar(0-11,ph) (B1GB)
 		// xxx
@@ -815,6 +816,8 @@ seg1_p0(void) {
 
 	case 0x71: // gb => br (22)
 		GB22(R[NUM_BR0]);
+		GB22(R[NUM_BR1]);
+		// yes we have two DML
 		// B2GM loc g0: inh parity xxx
 		break;
 	case 0x72: // complex gating
@@ -884,15 +887,20 @@ seg1_p0(void) {
 	 */
 misc_dec:
 	;
-	uint32_t decode_pt = mir.w[0];
+	// i got the bytes backwards in the case statement but i'm not
+	// motivated to fix it
+	uint32_t decode_pt = ntohs(mymir.q & 0xffff);
 
 	/* xxx concerned that this switch might be slow */
 	switch (decode_pt) {
 
 // row 0, d8
 	case 0xd827: break; // spare
-	case 0xd82b: break; // pymch xxx
-		// gate bits from br to mchtr
+	case 0xd82b: // pymch
+		// gate parity bits from br0 to mchtr
+		R[NUM_MCHTR] = R[NUM_BR0] && (M_PH|M_PL);
+		assert(1 == 2);
+		break;
 	case 0xd82d: // hmrf
 		// hardware initialize the 3a cc
         cpu_hmrf();
@@ -1076,8 +1084,14 @@ misc_dec:
 		// load a new opcode with servicing interrupts
 
 // row 7, ca
-	case 0xca27: break; // sbr xxx
-	case 0xca2b: break; // zbr xxx
+	case 0xca27: // sbr
+		R[NUM_BR0] = (M_R20 | M_PH | M_PL);
+		R[NUM_BR1] = (M_R20 | M_PH | M_PL);
+		break;
+	case 0xca2b: // zbr
+		R[NUM_BR0] = 0;
+		R[NUM_BR1] = 0;
+		break;
 	case 0xca2d: break; // idswq xxx
 		// idle the switch sequencer in the mch
 	case 0xca1d: break; // sstp xxx

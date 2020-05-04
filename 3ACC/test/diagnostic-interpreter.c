@@ -53,7 +53,7 @@ void cleanup(void);
 
 int testno, testseg;
 
-uint16_t table[] = {
+uint16_t test1_cmch[] = {
 	0145, // transplanted test header, for test #1
 	0400, // segment 4
 	// page 15
@@ -88,6 +88,11 @@ uint16_t table[] = {
 	020017, 041,
 	//000021, // NPASSTST
 
+//#if 0
+//#endif
+};
+
+uint16_t test2_cbus[] = {
 	// test 2
 	0245,
 	// test 2, segment 1
@@ -106,6 +111,55 @@ uint16_t table[] = {
 	020017, 025,
 	// page 30
 	021,
+};
+
+uint16_t test3_cclock[] = {
+	0345,
+	0100,
+	021,
+	// xxx total fiction
+	020017, 0,
+};
+
+uint16_t test4_cinitial[] = {
+	// test 4 - initialization
+	// page 48
+	0445,
+	// page 49
+	0100, // segment 1
+	020005, 025750,
+	020005, 023712,
+	016710,
+	050014, 017,0177777,
+	020017, 01,
+	// page 50
+	022414, 01,
+	020017, 02,
+	022514, 01,
+	020017, 02,
+	013710,
+	020414, 0,
+	// page 51
+	020017, 063,
+	020005, 025712,
+	016710,
+	050014, 0,0,
+	020017, 03,
+	022414, 01,
+	// page 52
+	020017, 04,
+	022514, 01,
+	020017, 04,
+	013710,
+	02414, 0,
+	020017, 063,
+
+	021,
+	// segment 3
+	// page 53
+	0200,
+	02301,
+	// xxx um, loops dont exist yet
 };
 
 int
@@ -127,7 +181,10 @@ main(int argc, char** argv)
 	atexit(&cleanup);
 	start_simh();
 
-	return run_test(table);
+	//run_test(test1_cmch);
+	//run_test(test2_cbus);
+	//run_test(test3_cclock);
+	run_test(test4_cinitial);
 }
 
 void
@@ -276,7 +333,7 @@ run_test(uint16_t* test)
 			int C = param & 0037;
 			bool compare;
 			if (A == 0100) { // A==1, whole register
-				compare = (mchb == arg);
+				compare = ((mchb & M_R20) == (arg & M_R20));
 				printf("compare %o==%o? %o\n", mchb, arg, mchb&arg);
 			} else { // A == 0, single bit
 				compare = (((mchb>>C) & 1) == (arg & 1));
@@ -307,6 +364,20 @@ run_test(uint16_t* test)
 			case 077:
 				puts("-mchb");
 				mchb = mch_call(MCH_RTNMCHB, arg) >> 8; break;
+			case 0173:
+				puts("-ar0");
+				// pr-1c912-50 p61
+				unimplemented(w);
+				break;
+			case 0167:
+				puts("-br0");
+				// return br0
+
+				// br0 =e2=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x99e2) >> 8;
+				// mchb -> mchtr -> return
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
+				break;
 			case 0137:
 				puts("-er");
 				mchb = mch_call(MCH_RTNER, arg) >> 8; break;
