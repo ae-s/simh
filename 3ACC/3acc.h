@@ -1,6 +1,34 @@
 #ifndef _3ACC_H_
 #define _3ACC_H_
 
+/***** First, the maintenance channel. *****/
+#define MCH_CLER 0x65
+#define MCH_CLMSR 0x35
+#define MCH_CLPT 0xc5
+#define MCH_CLTTO 0x2d
+#define MCH_DISA 0xa5
+#define MCH_DISB 0xe1
+#define MCH_INITCLK 0x47
+#define MCH_LDMAR 0x4d
+#define MCH_LDMCHB 0x99
+#define MCH_LDMIRH 0x8d
+#define MCH_LDMIRL 0x1d
+#define MCH_MSTART 0xc9
+#define MCH_MSTOP 0xd1
+#define MCH_RTNER 0x8b
+#define MCH_RTNMB 0xa3
+#define MCH_RTNMCHB 0xb1
+#define MCH_RTNMMH 0x55
+#define MCH_RTNMML 0x95
+#define MCH_RTNSS 0x93
+#define MCH_SPCLK 0x17
+#define MCH_STCLK 0xc3
+#define MCH_SWITCH 0x0f
+#define MCH_TOGCLK 0x27
+
+
+/***** Now some Registers Stuff *****/
+
 /* Because of the pervasive parity checking in this processor, data
  * paths are the next size up from what they might seem to require.
  */
@@ -104,9 +132,9 @@ typedef uint32_t reg20;
 REGBITS_20(SR_SS,
            AME, BHC, BIN, BTC,
            DME, HLT, ISC1, ISC2,
-           LOF, LON, MAN, MAINT,
+           LOF, LON, MAN, MINT,
            CC, REJ, STOP, DISA,
-           PRI, DISP, BPC, IPLTRK, 
+           PRI, DISP, BPC, IPLTRK,
            CC0, CC1);
 
 // masking constants for the MCS register

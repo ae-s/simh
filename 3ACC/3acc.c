@@ -148,9 +148,8 @@ mchmsg_cmd(int32 arg, const char* buf)
 	uint32 msg;
 
 	msg = strtol(buf, NULL, 16);
-	printf("send mch msg %#x ...\n", (unsigned int) msg);
 	result = mchmsg(msg);
-	printf("result: %#x\n", (unsigned int) result);
+	printf("mch: %#x\n", (unsigned int) result);
 	return SCPE_OK;
 }
 
@@ -158,78 +157,81 @@ uint32
 mchmsg(uint32 msg)
 {
 	uint8 mcc = msg & 0xff;
-	R[NUM_MCHTR] = msg >> 8;
+	R[NUM_MCHTR] = msg >> 8 & 0x3fffff;
 
 	/* see sh B9GJ */
 	switch (mcc) {
-	case 0x65: // cler
+	case MCH_CLER:
 		// xxx
 		break;
-	case 0x35: // clmsr
+	case MCH_CLMSR:
 		// xxx
 		break;
-	case 0xc5: // clpt
+	case MCH_CLPT:
 		// xxx
 		break;
-	case 0x2d: // cltto
+	case MCH_CLTTO:
 		// xxx
 		break;
-	case 0xa5: // disa
+	case MCH_DISA:
 		// xxx
 		break;
-	case 0xe1: // disb
+	case MCH_DISB:
 		// xxx
 		break;
-	case 0x47: // initclk
+	case MCH_INITCLK:
 		// xxx
 		break;
-	case 0x4d: // ldmar
-		// xxx
+	case MCH_LDMAR:
+		// xxx check: cc=offline and either (stop or freeze)
+		R[NUM_SS] &= ~SR_SS_STOP; // 1. clear stop
+		R[NUM_MAR] = R[NUM_MCHTR] & 07777; // 2. load mar with low-12 of mchtr
+		// xxx // 3. set freeze
 		break;
-	case 0x99: // ldmchb
+	case MCH_LDMCHB:
 		R[NUM_MCHB] = R[NUM_MCHTR];
 		break;
-	case 0x8d: // ldmirh
+	case MCH_LDMIRH:
 		// xxx
 		break;
-	case 0x1d: // ldmirl
-		// (xxx, check that this is actually 1d)
+	case MCH_LDMIRL:
+		// (xxx, check that this command is actually 0x1d; the print was not clear)
 		// xxx
 		break;
-	case 0xc9: // mstart
+	case MCH_MSTART:
 		// xxx
 		break;
-	case 0xd1: // mstop
+	case MCH_MSTOP:
+		R[NUM_SS] |= SR_SS_STOP;
+		break;
+	case MCH_RTNER:
+		R[NUM_MCHTR] = R[NUM_ER];
+		break;
+	case MCH_RTNMB:
 		// xxx
 		break;
-	case 0x8b: // rtner
-		// xxx
-		break;
-	case 0xa3: // rtnmb
-		// xxx
-		break;
-	case 0xb1: // rtnmchb
+	case MCH_RTNMCHB:
 		R[NUM_MCHTR] = R[NUM_MCHB];
 		break;
-	case 0x55: // rtnmmh
+	case MCH_RTNMMH:
 		// xxx
 		break;
-	case 0x95: // rtnmml
+	case MCH_RTNMML:
 		// xxx
 		break;
-	case 0x93: // rtnss
+	case MCH_RTNSS:
+		R[NUM_MCHTR] = R[NUM_SS];
+		break;
+	case MCH_SPCLK:
 		// xxx
 		break;
-	case 0x17: // spclk
+	case MCH_STCLK:
 		// xxx
 		break;
-	case 0xc3: // stclk
+	case MCH_SWITCH:
 		// xxx
 		break;
-	case 0x0f: // switch
-		// xxx
-		break;
-	case 0x27: // togclk
+	case MCH_TOGCLK:
 		// xxx
 		break;
 	default: break;
