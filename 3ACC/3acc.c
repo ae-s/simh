@@ -899,7 +899,6 @@ misc_dec:
 	case 0xd82b: // pymch
 		// gate parity bits from br0 to mchtr
 		R[NUM_MCHTR] = R[NUM_BR0] && (M_PH|M_PL);
-		assert(1 == 2);
 		break;
 	case 0xd82d: // hmrf
 		// hardware initialize the 3a cc
@@ -1085,12 +1084,13 @@ misc_dec:
 
 // row 7, ca
 	case 0xca27: // sbr
-		R[NUM_BR0] = (M_R20 | M_PH | M_PL);
-		R[NUM_BR1] = (M_R20 | M_PH | M_PL);
+		R[NUM_BR0] = (M_R20);
+		R[NUM_BR1] = (M_R20);
 		break;
 	case 0xca2b: // zbr
-		R[NUM_BR0] = 0;
-		R[NUM_BR1] = 0;
+		// odd parity, of course
+		R[NUM_BR0] = 0 | M_PH | M_PL;
+		R[NUM_BR1] = 0 | M_PH | M_PL;
 		break;
 	case 0xca2d: break; // idswq xxx
 		// idle the switch sequencer in the mch
