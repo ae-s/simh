@@ -41,8 +41,14 @@ void cleanup(void);
 #define NSTOP    027
 #define NFRZ     033
 #define N2RETRN  011
+#define NNO3CD   043
+#define NTESTSEG 000
+#define NBGN     045
+#define NMICRO   005
 
 #define OP(loop, narg, param, inst) (loop<<15 | narg<<13 | param<<6 | inst)
+
+int testno, testseg;
 
 uint16_t table[] = {
 	// bits of test 1 segment 2
@@ -76,6 +82,8 @@ uint16_t table[] = {
 #endif
 
 	// actually, just the numbers
+	0145, // transplanted test header
+	0400,
 	// page 15
 	017627,
 	020033, 0,
@@ -239,7 +247,9 @@ run_test(uint16_t* test)
 		uint32_t arg = getarg(loop_var, &test[loc]);
 		switch (w & M_CMD) {
 		case NFAILTST:
-			printf("*** TEST FAILED AT %d: trouble # %d ***\n", loc, arg);
+			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
+				   testno, testseg,
+				   100*testno + arg);
 			if (param == 0) {
 				return arg;
 			}
@@ -295,7 +305,7 @@ run_test(uint16_t* test)
 			switch(param) {
 			case 0167: // system status register
 				puts("-ss");
-				mchb = mch_call(MCH_RTNSS, 0) << 8;
+				mchb = mch_call(MCH_RTNSS, 0) >> 8;
 				break;
 			}
 			break;
@@ -307,7 +317,18 @@ run_test(uint16_t* test)
 			puts("nfrz");
 			mchb = mch_call(MCH_LDMAR, arg);
 			break;
-		default: assert(false);
+		case NNO3CD:
+			printf("*** THIS TEST WILL NEVER WORK (NNO3CD) ***\n");
+			return -1;
+		case NTESTSEG: testseg = param; break;
+		case NBGN: testno = param; break;
+		case NMICRO:
+			puts("nmicro");
+			assert(false);
+			break;
+		default:
+			printf("can't do %o\n", w & M_CMD);
+			assert(false);
 		}
 
 		loc += 1 + loop_count*narg;
