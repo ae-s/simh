@@ -16,6 +16,15 @@ t_stat cpu_reset(DEVICE* dptr);
 t_stat mchmsg_cmd(int32 arg, const char* buf);
 uint32 mchmsg(uint32 msg);
 
+void seg0_p0(void);
+void seg0_p1(void);
+void seg0_p2(void);
+void seg0_p3(void);
+void seg1_p0(void);
+void seg1_p1(void);
+void seg1_p2(void);
+void seg1_p3(void);
+
 uint32 R[NUM_REGISTERS];
 /* these are the registers that are visible on the front panel.
  * microcode internal registers are not accessible to the user.
@@ -162,7 +171,7 @@ mchmsg(uint32 msg)
 	/* see sh B9GJ */
 	switch (mcc) {
 	case MCH_CLER:
-		// xxx
+		R[NUM_ER] = 0;
 		break;
 	case MCH_CLMSR:
 		// xxx
@@ -192,11 +201,17 @@ mchmsg(uint32 msg)
 		R[NUM_MCHB] = R[NUM_MCHTR];
 		break;
 	case MCH_LDMIRH:
-		// xxx
+		// load high 16 of mir from mchb
+		R[NUM_MIR] &= 0x0000ffff;
+		R[NUM_MIR] |= (R[NUM_MCHB] & 0xffff) << 16;
 		break;
 	case MCH_LDMIRL:
 		// (xxx, check that this command is actually 0x1d; the print was not clear)
-		// xxx
+		// 1. load low 16 of mir from mchb
+		R[NUM_MIR] &= 0xffff0000;
+		R[NUM_MIR] |= R[NUM_MCHB] & 0xffff;
+		// 2. run decoders
+		seg1_p0();
 		break;
 	case MCH_MSTART:
 		// xxx
@@ -318,15 +333,31 @@ sim_instr(void)
 	 * machine cycle.
 	 */
 
+	seg0_p0();
+	seg1_p0();
+
+	seg0_p1();
+	seg1_p1();
+
+	seg0_p2();
+	seg1_p2();
+
+	seg0_p3();
+	seg1_p3();
+
+	return SCPE_OK;
+}
+
 	/* ==== CLOCK PHASE 0 START ====
 	 * ==== CLOCK PHASE 0 START ====
 	 * ==== CLOCK PHASE 0 START ====
 	 * ==== CLOCK PHASE 0 START ====
 	 */
 
+static uint32 mar;
+static microinstruction mir;
+void seg0_p0(void) {
 	/* **** microinstruction pipeline, stage 1 **** */
-	static uint32 mar;
-	static microinstruction mir;
 	mar = R[NUM_MAR];
 	mir.q = R[NUM_MIR];
 
@@ -374,12 +405,17 @@ sim_instr(void)
 
     /* allow the MRF to chime in too; see function cpu_reset */
 	mar |= mar_jam;
+}
 
-
+void
+seg1_p0(void) {
 	/* **** microinstruction pipeline, stage 2 **** */
-
+	microinstruction mymir;
+	mymir.q = R[NUM_MIR];
 	/* sh b1gj loc d2 */
-	uff.malz = ((mir.mi.na == 0));
+	uff.malz = ((mymir.mi.na == 0));
+
+	gb = 0;
 
 #define GB18(from) gb = from
 #define GB22(from) gb = from
@@ -387,7 +423,7 @@ sim_instr(void)
 	/* == from field decoder ==
 	 * ref. sd-1c900-01 sh D13 (note 312)
 	 */
-	switch ((uint8_t)mir.mi.from) {
+	switch ((uint8_t)mymir.mi.from) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // f1o4l1+f3o4r7 (B1GB)
 		// RAR(0-11) => GB(8-19)
@@ -1065,14 +1101,16 @@ misc_dec:
 		// b1gd, loc g1
 	case 0xca1b: break; // sbpc xxx
 	}
-
+}
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 	/* ==== CLOCK PHASE 1 START ==== */
 
 	/* **** microinstruction pipeline, stage 1 **** */
+void seg0_p1(void) {}
 	/* **** microinstruction pipeline, stage 2 **** */
+void seg1_p1(void) {}
 
 	/* ==== CLOCK PHASE 2 START ==== */
 	/* ==== CLOCK PHASE 2 START ==== */
@@ -1080,7 +1118,9 @@ misc_dec:
 	/* ==== CLOCK PHASE 2 START ==== */
 
 	/* **** microinstruction pipeline, stage 1 **** */
+void seg0_p2(void) {}
 	/* **** microinstruction pipeline, stage 2 **** */
+void seg1_p2(void) {}
 
 	/* ==== CLOCK PHASE 3 START ==== */
 	/* ==== CLOCK PHASE 3 START ==== */
@@ -1089,7 +1129,7 @@ misc_dec:
 
 	/* **** microinstruction pipeline, stage 1 **** */
     // microinstruction pipeline, stage 1
-
+void seg0_p3(void) {
 	/* many ff's are cleared late in the microcycle, during phase P3.
 	 * cite: sh B1GH, loc F0-F8 */
 	uff.alo = FALSE;
@@ -1106,8 +1146,7 @@ misc_dec:
 	R[NUM_MAR] = mar;
 
     mar_jam = 0;
+}
 
 	/* **** microinstruction pipeline, stage 2 **** */
-
-	return SCPE_OK;
-}
+void seg1_p3(void) {}

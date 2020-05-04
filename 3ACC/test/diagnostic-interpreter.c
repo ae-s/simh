@@ -34,6 +34,7 @@ pid_t simh_pid = 0;
 void cleanup(void);
 
 #define NFAILTST 017
+#define NFLBITS  020
 #define NPASSTST 021
 #define NCOMPARE 014
 #define NSEND    006
@@ -45,45 +46,16 @@ void cleanup(void);
 #define NTESTSEG 000
 #define NBGN     045
 #define NMICRO   005
+#define NZERO_ER 012
+#define NMASK    013
 
 #define OP(loop, narg, param, inst) (loop<<15 | narg<<13 | param<<6 | inst)
 
 int testno, testseg;
 
 uint16_t table[] = {
-	// bits of test 1 segment 2
-#if 0
-	OP(0, 2, 077, NSEND), 017, 0137771, // send 07737771
-	OP(0, 0, 077, NRETRN), // get offline mchb
-	OP(0, 2, 0100, NCOMPARE), 017, 0137771, // compare to 07737771
-	OP(0, 0, 0, NFAILTST),// failure
-	OP(0, 0, 0, NPASSTST),// success
-#endif
-	// test 1 segment 4: cdgmch, page 15
-
-#if 0
-	// my shit transcriptions
-	OP(0, 0, 0176, NSTOP), // set STOP bit (MSTOP command)
-	OP(0, 1, 0, NFRZ), 00, // load and freeze offline MAR with zero
-	OP(0, 0, 0167, N2RETRN), // xxx RTNSS get the SS register
-
-	// check that the stop bit is clear
-	021614, 0,
-	//OP(0, 1, 016, NCOMPARE), 00,
-	OP(0, 1, 0, NFAILTST), 036,
-
-	// page 16
-	OP(0, 0, 0176, NSTOP), // set STOP bit (MSTOP command)
-	OP(0, 0, 0167, N2RETRN), // xxx RTNSS get the SS register
-
-	// check that the stop bit is set
-	021614, 01,
-	OP(0, 1, 0, NFAILTST), 036,
-#endif
-
-	// actually, just the numbers
-	0145, // transplanted test header
-	0400,
+	0145, // transplanted test header, for test #1
+	0400, // segment 4
 	// page 15
 	017627,
 	020033, 0,
@@ -96,7 +68,7 @@ uint16_t table[] = {
 	021614, 1,
 	020017, 037,
 	020005, 023712,
-	002005, 0125342,
+	020005, 0125342,
 	000012,
 	013710,
 	// page 17
@@ -104,7 +76,8 @@ uint16_t table[] = {
 	054014, 0,01777,
 	020017, 042,
 	013710,
-	040013, 017,017600,
+	040013, 017,0176000,
+	054014, 017, 0176000,
 	020017, 043,
 
 	000012,
@@ -113,7 +86,26 @@ uint16_t table[] = {
 	020017, 040,
 	020114, 0,
 	020017, 041,
-	000021, // NPASSTST
+	//000021, // NPASSTST
+
+	// test 2
+	0245,
+	// test 2, segment 1
+	0100,
+	// page 28
+	020005, 0114400,
+
+	007710,
+
+	050014, 0,0,
+	020020, 1,
+	// page 29
+	022414, 0,
+	020017, 025,
+	022514, 0,
+	020017, 025,
+	// page 30
+	021,
 };
 
 int
@@ -191,6 +183,8 @@ getarg(int loop_var, uint16_t* w)
 	if (narg == 1) ret = (uint32_t)w[loop_var];
 	if (narg == 2) ret = (uint32_t)(w[loop_var*2])<<16 |
 	                     (uint32_t)(w[loop_var*2+1]);
+
+	printf("narg=%d so arg=%o\n", narg, ret);
 	return ret;
 }
 
@@ -228,6 +222,14 @@ mch_call(uint32_t cmd, uint32_t data)
 	return response;
 }
 
+void
+unimplemented(int instr)
+{
+	printf("*** UNIMPLEMENTED: %o [test %d seg %d] ***\n",
+		   instr, testno, testseg);
+	assert(false);
+}
+
 int
 run_test(uint16_t* test)
 {
@@ -250,13 +252,21 @@ run_test(uint16_t* test)
 			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
 				   testno, testseg,
 				   100*testno + arg);
+			printf("online MCHB: %o\n", mchb);
 			if (param == 0) {
 				return arg;
 			}
-			assert(false);
+			unimplemented(w);
+			break;
+		case NFLBITS:
+			// individual trouble number is arg + ordinal of lowest set bit in mchb
+			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
+				   testno, testseg,
+				   100*testno + arg + ffs(mchb));
+			return arg + ffs(mchb);
 			break;
 		case NPASSTST:
-			printf("*** TEST PASSED ***\n");
+			printf("*** TEST %d SEGMENT %d PASSED ***\n", testno, testseg);
 			return 0;
 		case NCOMPARE:
 			puts("ncompare");
@@ -265,15 +275,14 @@ run_test(uint16_t* test)
 			int B = param & 0040;
 			int C = param & 0037;
 			bool compare;
-			if (A == 0100) { // whole register
+			if (A == 0100) { // A==1, whole register
 				compare = (mchb == arg);
+				printf("compare %o==%o? %o\n", mchb, arg, mchb&arg);
 			} else { // A == 0, single bit
-				compare = (((mchb>>C) & 1) == arg);
+				compare = (((mchb>>C) & 1) == (arg & 1));
+				printf("compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
 			}
-			if (B != 0) {
-				// figure out what this means
-				assert(false);
-			}
+			if (B != 0) compare = !compare;
 
 			if (compare) {
 				// if true then skip next table entry
@@ -289,14 +298,19 @@ run_test(uint16_t* test)
 			case 077:
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				break;
+			default: unimplemented(w);
 			}
 			break;
 		case NRETRN:
 			puts("nretrn");
 			switch (param) {
 			case 077:
-				mchb = mch_call(MCH_RTNMCHB, arg) >> 8;
-				break;
+				puts("-mchb");
+				mchb = mch_call(MCH_RTNMCHB, arg) >> 8; break;
+			case 0137:
+				puts("-er");
+				mchb = mch_call(MCH_RTNER, arg) >> 8; break;
+			default: unimplemented(w);
 			}
 			break;
 
@@ -318,17 +332,26 @@ run_test(uint16_t* test)
 			mchb = mch_call(MCH_LDMAR, arg);
 			break;
 		case NNO3CD:
-			printf("*** THIS TEST WILL NEVER WORK (NNO3CD) ***\n");
+			printf("*** THIS TEST WILL NEVER WORK ***\n");
+			printf("*** NNO3CD commands require a full emulator ***\n");
 			return -1;
 		case NTESTSEG: testseg = param; break;
 		case NBGN: testno = param; break;
 		case NMICRO:
 			puts("nmicro");
-			assert(false);
+			mchb = mch_call(MCH_LDMIRL, arg) >> 8;
+			break;
+		case NZERO_ER:
+			puts("nzero_er");
+			mchb = mch_call(MCH_CLER, arg) >> 8;
+			break;
+		case NMASK:
+			puts("nmask");
+			mchb &= arg;
 			break;
 		default:
-			printf("can't do %o\n", w & M_CMD);
-			assert(false);
+			unimplemented(w);
+			break;
 		}
 
 		loc += 1 + loop_count*narg;
