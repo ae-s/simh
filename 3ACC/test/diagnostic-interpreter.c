@@ -48,6 +48,8 @@ void cleanup(void);
 #define NMICRO   005
 #define NZERO_ER 012
 #define NMASK    013
+#define NBEGIN   001
+#define NLP_END  002
 
 #define OP(loop, narg, param, inst) (loop<<15 | narg<<13 | param<<6 | inst)
 
@@ -86,7 +88,7 @@ uint16_t test1_cmch[] = {
 	020017, 040,
 	020114, 0,
 	020017, 041,
-	//000021, // NPASSTST
+	000021, // NPASSTST
 
 //#if 0
 //#endif
@@ -110,7 +112,7 @@ uint16_t test2_cbus[] = {
 	022514, 0,
 	020017, 025,
 	// page 30
-	021,
+	021, // NPASSTST
 };
 
 uint16_t test3_cclock[] = {
@@ -151,15 +153,81 @@ uint16_t test4_cinitial[] = {
 	022514, 01,
 	020017, 04,
 	013710,
-	02414, 0,
+	020414, 0,
 	020017, 063,
 
-	021,
-	// segment 3
+	// segment 2
 	// page 53
 	0200,
-	02301,
-	// xxx um, loops dont exist yet
+	02301, // NLP_BEGIN
+
+	0120005,
+	0114523,
+	0114525,
+	0114526,
+	0114531,
+	0114532,
+	0114534,
+	0114543,
+	0114545,
+	0114546,
+	0114551,
+	0114552,
+	0114554,
+	0114507,
+	0114513,
+	0114515,
+	0114516,
+	0114607,
+	0114465,
+	0114463,
+
+	007710,
+	// page 54
+	050014, 0,0,
+	020020, 05,
+	022414, 01,
+	020017, 031,
+	022514, 01,
+	// page 55
+	020017, 031,
+	040002, 0, 015215-015152, // end of loop
+
+	016711,
+	040013, 017,074377,
+	050014, 02,040006,
+
+	// page 56
+	020020, 05,
+
+	// page 57
+	// segment 3
+	0300,
+	001101,
+	0120005,
+	0114626,
+	0114625,
+	0114706,
+	0114634,
+	0114643,
+	0114645,
+	0114646,
+	0114456,
+
+	007710,
+	050014, 0,0,
+	// page 58
+	020020, 032,
+	022414, 01,
+	020017, 056,
+	022514, 01,
+	020017, 056,
+	// page 59
+	040002, 0, 0,015263-015232,
+
+	// page 60
+	// segment 4
+	021,
 };
 
 int
@@ -181,9 +249,9 @@ main(int argc, char** argv)
 	atexit(&cleanup);
 	start_simh();
 
-	//run_test(test1_cmch);
-	//run_test(test2_cbus);
-	//run_test(test3_cclock);
+	run_test(test1_cmch);
+	run_test(test2_cbus);
+	run_test(test3_cclock);
 	run_test(test4_cinitial);
 }
 
@@ -237,22 +305,18 @@ getarg(int loop_var, uint16_t* w)
 	int narg = (w[0] & M_NARG) >> 13;
 	uint32_t ret = 0;
 	w++;
-	if (narg == 1) ret = (uint32_t)w[loop_var];
-	if (narg == 2) ret = (uint32_t)(w[loop_var*2])<<16 |
-	                     (uint32_t)(w[loop_var*2+1]);
+	if ((*w & M_LOOP) == M_LOOP) {
+		if (narg == 1) ret = (uint32_t)w[loop_var];
+		if (narg == 2) ret = (uint32_t)(w[loop_var*2])<<16 |
+						   (uint32_t)(w[loop_var*2+1]);
+	} else {
+		if (narg == 1) ret = (uint32_t)w[0];
+		if (narg ==2) ret =  (uint32_t)(w[0])<<16 |
+						   (uint32_t)(w[1]);
+	}
 
 	printf("narg=%d so arg=%o\n", narg, ret);
 	return ret;
-}
-
-// eat whatever spew happens to be lying around
-void
-swallow(void)
-{
-	char tmp[1000];
-	fgets((char*)&tmp, 1000, fd_resp);
-	printf("%s\n", &tmp);
-	return;
 }
 
 uint32_t
@@ -296,30 +360,35 @@ run_test(uint16_t* test)
 	int loop_begin;
 	uint32_t mchb;
 
-	sleep(1);
-	swallow();
+	//sleep(1);
+	printf("running another test ...");
 
 	while (true) {
 		uint16_t w = (test[loc]);
+		bool loop = (w & M_LOOP) == M_LOOP;
 		int narg = (w & M_NARG) >> 13;
 		int param = (w & M_PARM) >> 6;
 		uint32_t arg = getarg(loop_var, &test[loc]);
+		printf("exec: %o\n", w);
 		switch (w & M_CMD) {
 		case NFAILTST:
+			puts("nfailtest");
 			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
 				   testno, testseg,
 				   100*testno + arg);
-			printf("online MCHB: %o\n", mchb);
+			printf(" online MCHB: %o\n", mchb);
 			if (param == 0) {
 				return arg;
 			}
 			unimplemented(w);
 			break;
 		case NFLBITS:
+			puts("nflbits");
 			// individual trouble number is arg + ordinal of lowest set bit in mchb
 			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
 				   testno, testseg,
 				   100*testno + arg + ffs(mchb));
+			printf(" online MCHB: %o\n", mchb);
 			return arg + ffs(mchb);
 			break;
 		case NPASSTST:
@@ -332,18 +401,21 @@ run_test(uint16_t* test)
 			int B = param & 0040;
 			int C = param & 0037;
 			bool compare;
+			printf(" a=%o b=%o c=%o\n", A, B, C);
 			if (A == 0100) { // A==1, whole register
 				compare = ((mchb & M_R20) == (arg & M_R20));
-				printf("compare %o==%o? %o\n", mchb, arg, mchb&arg);
+				printf(" compare %o==%o? &%o, %d\n", mchb, arg, mchb&arg, compare);
 			} else { // A == 0, single bit
 				compare = (((mchb>>C) & 1) == (arg & 1));
-				printf("compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
+				printf(" compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
 			}
 			if (B != 0) compare = !compare;
 
 			if (compare) {
+				printf(" compare true so skip %d*%d\n",
+					   (loop?loop_count:1), narg);
 				// if true then skip next table entry
-				loc += 1 + loop_count*narg;
+				loc += 1 + (loop?loop_count:1)*narg;
 				w = (test[loc]);
 				narg = (w & M_NARG) >> 13;
 			}
@@ -362,15 +434,15 @@ run_test(uint16_t* test)
 			puts("nretrn");
 			switch (param) {
 			case 077:
-				puts("-mchb");
+				puts(" -mchb");
 				mchb = mch_call(MCH_RTNMCHB, arg) >> 8; break;
 			case 0173:
-				puts("-ar0");
+				puts(" -ar0");
 				// pr-1c912-50 p61
 				unimplemented(w);
 				break;
 			case 0167:
-				puts("-br0");
+				puts(" -br0");
 				// return br0
 
 				// br0 =e2=> gb =99=> mchb
@@ -379,7 +451,7 @@ run_test(uint16_t* test)
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			case 0137:
-				puts("-er");
+				puts(" -er");
 				mchb = mch_call(MCH_RTNER, arg) >> 8; break;
 			default: unimplemented(w);
 			}
@@ -389,7 +461,7 @@ run_test(uint16_t* test)
 			puts("n2retrn");
 			switch(param) {
 			case 0167: // system status register
-				puts("-ss");
+				puts(" -ss");
 				mchb = mch_call(MCH_RTNSS, 0) >> 8;
 				break;
 			}
@@ -420,11 +492,31 @@ run_test(uint16_t* test)
 			puts("nmask");
 			mchb &= arg;
 			break;
+		case NBEGIN:
+			puts("nbegin");
+			loop_begin = loc+1;
+			loop_count = param;
+			loop_var = 0;
+			break;
+		case NLP_END:
+			puts("nlp_end");
+			puts("looping!!");
+			if (loop_count == loop_var+1) {
+				// done
+				loop_count = 1;
+				loop_var = 0;
+				break;
+			} else {
+				loc = loop_begin;
+				loop_var += 1;
+				continue;
+			}
+			break;
 		default:
 			unimplemented(w);
 			break;
 		}
 
-		loc += 1 + loop_count*narg;
+		loc += 1 + (loop?loop_count:1)*narg;
 	}
 }

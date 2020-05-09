@@ -1083,14 +1083,15 @@ misc_dec:
 		// load a new opcode with servicing interrupts
 
 // row 7, ca
-	case 0xca27: // sbr
-		R[NUM_BR0] = (M_R20);
-		R[NUM_BR1] = (M_R20);
+	case 0xca27: // sbr: set BR data bits, and parity bits
+		R[NUM_BR0] = M_R20 | M_PH | M_PL;
+		R[NUM_BR1] = M_R20;
 		break;
 	case 0xca2b: // zbr
-		// odd parity, of course
+		// zbr: clear BR data bits, set ph/pl bits
 		R[NUM_BR0] = 0 | M_PH | M_PL;
-		R[NUM_BR1] = 0 | M_PH | M_PL;
+		// BR1 doesn't have parity bits, cite sd-1c900-01 sh b2ga loc e1
+		R[NUM_BR1] = 0 ;
 		break;
 	case 0xca2d: break; // idswq xxx
 		// idle the switch sequencer in the mch
