@@ -65,6 +65,9 @@ typedef uint32_t reg20;
 #define NUM_SAR 19
 #define NUM_SS 18
 #define NUM_TI 17
+#define NUM_PT NUM_TI
+#define M_REG_PT 0xff00
+#define M_REG_TI 0x00ff
 
 #define NUM_MCS 16
 // non visible registers are numbered 32 and up
@@ -91,7 +94,7 @@ typedef uint32_t reg20;
 
 #define NUM_REGISTERS 48
 
-// xxx add numbers for all the registers
+
 
 #define MAXMEMSIZE 2<<20
 
@@ -138,14 +141,18 @@ REGBITS_20(SR_SS,
            CC0, CC1);
 
 // masking constants for the MCS register
-static const int REG_MCS_CF =  NBIT( 0);
-static const int REG_MCS_DS =  NBIT( 1);
-static const int REG_MCS_TR1 = NBIT( 2);
-static const int REG_MCS_TR2 = NBIT( 3);
-static const int REG_MCS_DR =  NBIT( 4);
-static const int REG_MCS_RU =  NBIT( 5);
-static const int REG_MCS_IFF = NBIT( 6);
-static const int REG_MCS_OPF = NBIT( 7);
+REGBITS_20(MCS,
+		   CF0, CF1,
+		   DS0, DS1,
+		   TR10, TR11,
+		   TR20, TR21,
+		   DR0, DR1,
+		   RU0, RU1,
+		   IFF0, IFF1,
+		   OPF0, OPF1,
+		   MARP0, MARP1,
+		   ERU0, ERU1,
+		   PL, PH);
 
 // masking constants for the ER register
 REGBITS_20(SR_ER,

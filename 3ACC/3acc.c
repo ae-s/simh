@@ -16,6 +16,12 @@ t_stat cpu_reset(DEVICE* dptr);
 t_stat mchmsg_cmd(int32 arg, const char* buf);
 uint32 mchmsg(uint32 msg);
 
+void cpu_hmrf(void);
+void cpu_stop(void);
+void cpu_complement_correction(void);
+
+void cpu_hardware_switch(void);
+
 void seg0_p0(void);
 void seg0_p1(void);
 void seg0_p2(void);
@@ -135,14 +141,14 @@ struct {
 } uff;
 
 #define UCODE_LEN 1<<12
-uint32 UCODE[1024];
+uint32 UCODE[2048];
 uint32* RAM = NULL;
 
 uint16  mar_jam = 0;
 
 #define UOP(ca,cb, pta,pna, na, to,from) \
-    (uint32) (ca<<32 | cb<<31 | pta<<30 | pna<<29 | \
-            na<<16 | to<<8 | from)
+    (uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 | ((uint32)pta)<<29 | ((uint32)pna)<<28 | \
+			  ((uint32)na)<<15 | ((uint32)to)<<7 | ((uint32)from))
 
 CTAB cmds[] = {
 	{ "mch", mchmsg_cmd, 0,
@@ -174,39 +180,51 @@ mchmsg(uint32 msg)
 		R[NUM_ER] = 0;
 		break;
 	case MCH_CLMSR:
+		// clears the maintenance state register
 		// xxx
 		break;
 	case MCH_CLPT:
-		// xxx
+		// clears the program timer
+		R[NUM_TI] &= M_REG_TI;
+		// xxx check that it actually leaves TI untouched
+		// xxx not executed if online
 		break;
 	case MCH_CLTTO:
+		// clear the timer timeout register (TTO), which clears the
+		// backup timing counter (BTC) after it has been set for a
+		// while.
 		// xxx
 		break;
 	case MCH_DISA:
+		// first i/o disable signal
 		// xxx
 		break;
 	case MCH_DISB:
+		// second i/o disable signal
 		// xxx
 		break;
 	case MCH_INITCLK:
+		// set the clock to phase 3
 		// xxx
 		break;
 	case MCH_LDMAR:
 		// xxx check: cc=offline and either (stop or freeze)
 		R[NUM_SS] &= ~SR_SS_STOP; // 1. clear stop
 		R[NUM_MAR] = R[NUM_MCHTR] & 07777; // 2. load mar with low-12 of mchtr
-		// xxx // 3. set freeze
+		// 3. set freeze
+		// xxx
 		break;
 	case MCH_LDMCHB:
+		// gate from MCHTR into MCHB (20 bits + parity)
 		R[NUM_MCHB] = R[NUM_MCHTR];
 		break;
 	case MCH_LDMIRH:
 		// load high 16 of mir from mchb
+		// xxx check if stop or freeze?
 		R[NUM_MIR] &= 0x0000ffff;
 		R[NUM_MIR] |= (R[NUM_MCHB] & 0xffff) << 16;
 		break;
 	case MCH_LDMIRL:
-		// (xxx, check that this command is actually 0x1d; the print was not clear)
 		// 1. load low 16 of mir from mchb
 		R[NUM_MIR] &= 0xffff0000;
 		R[NUM_MIR] |= R[NUM_MCHTR] & 0xffff;
@@ -215,6 +233,7 @@ mchmsg(uint32 msg)
 		seg1_p0();
 		break;
 	case MCH_MSTART:
+		// clear FRZ
 		// xxx
 		break;
 	case MCH_MSTOP:
@@ -245,9 +264,11 @@ mchmsg(uint32 msg)
 		// xxx
 		break;
 	case MCH_SWITCH:
-		// xxx
+		// hardware initialization
+		cpu_hardware_switch();
 		break;
 	case MCH_TOGCLK:
+		// advance through one half clock phase
 		// xxx
 		break;
 	default: break;
@@ -261,27 +282,34 @@ mchmsg(uint32 msg)
 void
 load_stub_ucode(void)
 {
-    int pos;
+    int pos = 0;
+
     pos = 0277;
 
     // ZRU i guess
-    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x81, 0xeb); 
+    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x81, 0xeb);
 
     // microcode checklist copied from PK-1C900 page B21
 
     // (a) Initialize RAR.
+	//UCODE[pos++] = UOP();
     // (b) Save SS —> AI.
     UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xa3, 0x8e);
     // (c) Clear MRFMCH INHIBIT FF and decoder maintenance status.
+	// IMTC%
+	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x1d, 0x36);
     // (d) Initialize the first 10 (0-9) I/O main channels.
     // (e) Initialize the IB and the function register.
     // (f) Zero SDR1.
     // (g) Save: PA —> AK, IS —> DI, IM --> DK.
+	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x96, 0x9c); // pa => gb => ak
+	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x8b, 0xa5); // is => gb => di
+	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x87, 0xa5); // im => gb => dk
     // (h) Set interrupt mask to allow panel and other CC interrupts only.
     // (i) Zero the opcode FIL and I bits.
     UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xcc); // zopf
     UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xca); // zi
-    
+
     // (j) Zero SS register bits AME, DME, HLT, DISP, REJ, and SP2.
     // (k) Clear the IS.
     // (l) Set the main memory status register equal to 3CB0.
@@ -289,6 +317,42 @@ load_stub_ucode(void)
     // (n) Enable I/O and then send a main store initialization message twice.
     // (o) If the ISC1 equal to 0, set ISC1 equal to 1 and begin the main memory initialization program at location 20 hex (40 octal) If the ISC1 equals 1, idle the maintenance channel switch sequencer and proceed to (p)
     // (p) If ISC2 equals 0, set ISC2 equal to 1, set ISC1 equal to and stop and switch to other CC. If ISC2 equals 1, SS —> BR and reload main memory from tape (IPL SEQ).
+}
+
+/* hardware reset logic: pr-1c900-01 p B20 */
+void cpu_hardware_switch(void)
+{
+	// step 1:
+
+	// PT partially cleared
+	// ref sd-1c900-01 sh b8ga
+	R[NUM_PT] &= ~( M_REG_PT );
+
+	// I/O channels disabled
+	// xxx
+
+	// CC=0
+	// ISC2=0
+	// ISC1=0
+	R[NUM_SS] &= ~( SR_SS_ISC1 | SR_SS_ISC2 |
+					SR_SS_CC0 | SR_SS_CC1 );
+
+	// step 2:
+
+	// BHC=0
+	// STP=0
+	// MINT=0
+	R[NUM_SS] &= ~( SR_SS_MINT | SR_SS_BHC | SR_SS_STOP );
+	// BTC=1
+	R[NUM_SS] |= ( SR_SS_BTC );
+
+	// MSR=0
+	R[NUM_MMSR] = 0;
+	// CLOCK=p3 xxx
+	// FRZ=0 xxx
+	// MAR= 0x0bf = 0277
+	R[NUM_MAR] = 0277;
+	// Initialize MCH xxx
 }
 
 /* MRF Logic: sd-1c900-01 sh b7gh */
@@ -309,7 +373,8 @@ cpu_reset(DEVICE* dptr)
 		if (RAM == NULL) {
 			RAM = (uint32*) calloc((size_t)(MEM_SIZE >> 2), sizeof(uint32));
 		}
-        load_stub_ucode();
+
+#include "ucode-list1.h"
 
 		sim_vm_cmd = cmds;
 	}
@@ -390,7 +455,7 @@ void seg0_p0(void) {
 		// xxx
 	}
 
-	if (uff.ru) {
+	if ((R[NUM_MCS] & (MCS_RU0|MCS_RU1)) != 0) {
 		/* rar update (RU flipflop) is enabled: we are not in a
 		 * microsubroutine */
 		R[NUM_RAR] = mar;
@@ -770,6 +835,7 @@ seg1_p0(void) {
 		break;
 	case 0x99: // gb => mchb [mr3] (22)
 		GB22(R[NUM_MCHB]);
+		printf("mchb loaded from gb %d\n", gb);
 		break;
 	case 0x9a: // spare
 		break;
@@ -927,18 +993,19 @@ misc_dec:
 
 // row 1, e8
 	case 0xe827: break; // spare
-	case 0xe82b: // zer
-		// clear the error register
-        R[NUM_ER] = 0;
+	case 0xe82b: // zer, clear the error register
+        R[NUM_ER] = 0; // xxx this was "0 | M", what is that?
         break;
-	case 0xe82d: break; // zmint xxx
-		// clear the microinterpret bit
+	case 0xe82d: break; // zmint, clear the microinterpret bit
+		R[NUM_SS] &= SR_SS_MINT;
+		break;
 	case 0xe81d: break; // iocc xxx
 		// interrupt the other cc
 	case 0xe8d8: break; // zms xxx
 		// clear the maintenance state register
-	case 0xe8b8: break; // zpt xxx
-		// clear the program timer
+	case 0xe8b8: // zpt, clear the program timer
+		R[NUM_TI] &= M_REG_TI;
+		break;
 	case 0xe878: break; // spare
 	case 0xe8e8: break; // spare
 	case 0xe83a: break; // spare
@@ -947,10 +1014,8 @@ misc_dec:
 		// test dr
 	case 0xe8ca: break; // ty xxx
 	case 0xe8c9: break; // tx xxx
-	case 0xe81b: // zru (B1GB)
-		// clear ru
-        // xxx
-		uff.ru0 = FALSE;
+	case 0xe81b: // zru (B1GB), clear ru
+		R[NUM_MCS] &= ~( MCS_RU0|MCS_RU1 );
         break;
 
 // row 2, 36
@@ -959,8 +1024,10 @@ misc_dec:
 		// gate the iod to r11
 	case 0x362d: break; // s1db xxx
 		// gate switch register 1 to the db
-	case 0x361d: break; // imtc xxx
+	case 0x361d: // imtc
 		// idle the mch
+		// force-clear INRFMCH, sh B7GG loc F1
+		break; // xxx
 	case 0x36d8: break; // br => ti xxx
 		// gate br to ti (16)
 	case 0x36b8: break; // dml1 => cr xxx
@@ -973,8 +1040,8 @@ misc_dec:
 	case 0x363c: break; // ttr1 xxx
 	case 0x36cc: // ds => cf
 		// gate ds flag to cf
-		R[NUM_MCS] &= ~REG_MCS_CF;
-		R[NUM_MCS] |= (R[NUM_MCS] & REG_MCS_DS) >> 1;
+		R[NUM_MCS] &= ~MCS_CF0;
+		R[NUM_MCS] |= (R[NUM_MCS] & MCS_DS0) >> 1;
 		break;
 	case 0x36ca: break; // tds xxx
 	case 0x36c9: break; // tcf xxx
@@ -999,16 +1066,22 @@ misc_dec:
 	case 0x39e8: break; // md1 chtn xxx
 		// load r9 to ios (normal)
 	case 0x393a: break; // enb xxx
-	case 0x393c: break; // scf xxx
+	case 0x393c: // scf
 		// set cf
-	case 0x39cc: break; // sds xxx
-		// set ds
-	case 0x39ca: break; // str1 xxx
-		// set tr1
-	case 0x39c9: break; // str2 xxx
-		// set tr2
-	case 0x391b: break; // sdr xxx
-		// set dr
+		R[NUM_MCS] |= MCS_CF0|MCS_CF1;
+		break;
+	case 0x39cc: // sds, set ds
+		R[NUM_MCS] |= MCS_DS0|MCS_DS1;
+		break;
+	case 0x39ca: // str1, set tr1
+		R[NUM_MCS] |= MCS_TR10|MCS_TR11;
+		break;
+	case 0x39c9: // str2, set tr2
+		R[NUM_MCS] |= MCS_TR20|MCS_TR21;
+		break;
+	case 0x391b: // sdr, set dr
+		R[NUM_MCS] |= MCS_DR0|MCS_DR1;
+		break;
 
 // row 4, 3a
 	case 0x3a27: break; // spare
@@ -1028,16 +1101,21 @@ misc_dec:
 	case 0x3ae8: break; // md2 chtm xxx
 		// load r9 to ios (maintenance)
 	case 0x3a3a: break; // ena xxx
-	case 0x3a3c: break; // zcf xxx
-		// clear cf
-	case 0x3acc: break; // zds xxx
-		// clear ds
-	case 0x3aca: break; // ztr1 xxx
-		// clear tr1
-	case 0x3ac9: break; // ztr2 xxx
-		// clear tr2
-	case 0x3a1b: break; // zdr xxx
-		// clear dr
+	case 0x3a3c: // zcf, clear cf
+		R[NUM_MCS] &= ~( MCS_CF0|MCS_CF1 );
+		break;
+	case 0x3acc: // zds, clear ds
+		R[NUM_MCS] &= ~( MCS_DS0|MCS_DS1 );
+		break;
+	case 0x3aca: // ztr1, clear tr1
+		R[NUM_MCS] &= ~( MCS_TR10|MCS_TR11 );
+		break;
+	case 0x3ac9: // ztr2, clear tr2
+		R[NUM_MCS] &= ~( MCS_TR20|MCS_TR21 );
+		break;
+	case 0x3a1b: // zdr, clear dr
+		R[NUM_MCS] &= ~( MCS_DR0|MCS_DR1 );
+		break;
 
 // row 5, 3c
 	case 0x3c27: break; // abrg xxx

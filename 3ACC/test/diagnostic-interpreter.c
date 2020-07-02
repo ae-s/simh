@@ -31,6 +31,7 @@ FILE* fd_cmd, * fd_resp;
 
 pid_t simh_pid = 0;
 
+void init(void);
 void cleanup(void);
 
 #define NFAILTST 017
@@ -50,8 +51,9 @@ void cleanup(void);
 #define NMASK    013
 #define NBEGIN   001
 #define NLP_END  002
+#define NDONE 077 // hack, ahistorical
 
-#define OP(loop, narg, param, inst) (loop<<15 | narg<<13 | param<<6 | inst)
+#define OP(narg, param, inst) (narg<<13 | param<<6 | inst)
 
 int testno, testseg;
 
@@ -89,9 +91,6 @@ uint16_t test1_cmch[] = {
 	020114, 0,
 	020017, 041,
 	000021, // NPASSTST
-
-//#if 0
-//#endif
 };
 
 uint16_t test2_cbus[] = {
@@ -249,10 +248,27 @@ main(int argc, char** argv)
 	atexit(&cleanup);
 	start_simh();
 
+	init();
+
 	run_test(test1_cmch);
 	run_test(test2_cbus);
 	run_test(test3_cclock);
 	run_test(test4_cinitial);
+}
+
+/* instructions to run that yield a clean environment in the processor
+ * for testing.  replaces unknown functionality in PR-1C910.
+ */
+uint16_t init_testseq[] = {
+	/* */
+	OP(2, 0, NSEND), (M_PH|M_PL)>>16, 0,
+	OP(0,0,NDONE),
+};
+
+void
+init(void)
+{
+	run_test(init_testseq);
 }
 
 void
@@ -511,6 +527,8 @@ run_test(uint16_t* test)
 				loop_var += 1;
 				continue;
 			}
+			break;
+		case NDONE: // hack
 			break;
 		default:
 			unimplemented(w);
