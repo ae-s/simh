@@ -1,0 +1,87 @@
+Re-using the Diagnostic Monitor (CDGNM) tests as unit tests.
+
+* Diagnostic table entries, format
+
+[ L | N , N | B , B , B , B , B , B , B | I , I , I , I , I , I ]
+
+L = loop bit, 1 for looping and 0 for nonlooping
+N = number of data words (per loop)
+B = flags, 7 bits worth (instruction specific)
+I = instruction
+
+all numbers are in octal
+
+Instructions
+** 01 NBEGIN
+   - begin loop
+   - B field is number of iterations
+** 02 NLP_END
+   - end of loop from NBEGIN
+** 05 NMICRO
+** 04 NPROS
+   - return to call processing for one base level loop
+   - BBBBBB B
+** 06 NSEND
+   - BBBBBBB
+   - B=077 send immed to offline mchb
+** 10 NRETRN
+   - get a register from offline processor, store in diagnosing mchb
+   - BBBBBBB
+   - B=077 mchb
+   - B=167 ss
+   - B=137 er
+** 11 N2RETRN
+** 12 NZERO_ER
+   - ref pr-1c912-50 p10
+** 13 NMASK
+   - 
+   - AND online mchb with immed
+   - ref pr-1c930-40 p21
+** 14 NCOMPARE
+   - compare online mchb to immed
+   - B field: A B CCCCC
+	 - B=0 SUCCES - if equal, skip next table entry
+	 - 
+	 - 054014 00010 1 1 00000 001100
+	 - B=1 
+	 - A=0, CCCCC is a particular bit number
+	 - A=1, whole register
+** 16 NTTY
+   - store contents of online mchb as a data word for tty failure message
+   - ref pr-1c926-50 p 30
+** 17 NFAILTST
+   - AAAAA BB
+   - BB=0 failure exit - symbolic trouble number is <immed>
+** 20 NFLBITS
+   - something about the failure number is the number of the lowest nonzero bit
+   - ref pr-1c926-50 p 30
+   - BBBBB BB
+** 21 NPASSTST
+   - success exit from test
+** 22 NADD_OFF
+** 24 NLDMIR
+   - load high bits of offline mir with immed
+** 27 NSTOP
+   - ref pr-1c912-50 p16 #03
+** 33 NFRZ
+   - load and freeze offline mar with immed
+   - ref pr-1c930-40 p19
+** 34 NSTRTCLK
+   - start the off-line clock
+   - ref pr-1c912-50 p47 #35
+** 36 NRDMICRO
+   - AAAAAA B
+   - return offline micro word addressed in mar
+   - B=0 low half of micro word
+   - B=1 high half of micro word
+** 42 NCLRMS
+   - zero the offline MS register
+   - ref: pr-1c912-50 p42 #15
+** 43 NNO3CD
+   - execute 3a code in diagnosing processor
+   - BBBBBBB
+** 44 NRTNBLM
+   - turn off automatic returns to blm every 20 table entries
+   - ref pr-1c926-50 p 43
+** 45 NBGN
+   - beginning of a test

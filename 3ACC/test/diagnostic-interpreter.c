@@ -12,8 +12,9 @@
 #include "../3acc.h"
 
 /*
- * small, partial interpreter for the table-driven diagnostics used in
- * the #3 ESS.
+ * Small, partial interpreter for the table-driven diagnostics used in
+ * the #3 ESS.  This allows me to use the machine's own diagnostics as
+ * unit tests for the emulator.
  */
 
 /*
@@ -34,23 +35,46 @@ pid_t simh_pid = 0;
 void init(void);
 void cleanup(void);
 
+#define NTESTSEG 000
+#define NBEGIN   001
+#define NLP_END  002
+#define NTMTEST    3
+#define NPROS      4
+#define NMICRO   005
+#define NSEND    006
+#define N2SEND   007
+#define NRETRN   010
+#define N2RETRN  011
+#define NZERO_ER 012
+#define NMASK    013
+#define NCOMPARE 014
+#define NEXECUTE  13
+#define NTTY      14
 #define NFAILTST 017
 #define NFLBITS  020
 #define NPASSTST 021
-#define NCOMPARE 014
-#define NSEND    006
-#define NRETRN   010
+#define NADDOFF   18
+#define NADMIC    19
+#define LDMIR     20
+#define NSKIP     21
+#define NSTRT     22
 #define NSTOP    027
+#define ZERPT     24
+#define NDISABA   25
+#define NDISABB   26
 #define NFRZ     033
-#define N2RETRN  011
+#define NSTRTCLK  28
+#define NSTPCLK   29
+#define NRDMICRO  30
+#define NTGCLK    31
+#define NRESCLK   32
+#define NABT      33
+#define NCLRMS    34
 #define NNO3CD   043
-#define NTESTSEG 000
+#define NRTNBLM   36
 #define NBGN     045
-#define NMICRO   005
-#define NZERO_ER 012
-#define NMASK    013
-#define NBEGIN   001
-#define NLP_END  002
+#define NWDTST    38
+#define NTST_LP   39
 #define NDONE 077 // hack, ahistorical
 
 #define OP(narg, param, inst) (narg<<13 | param<<6 | inst)
@@ -225,7 +249,20 @@ uint16_t test4_cinitial[] = {
 	040002, 0, 0,015263-015232,
 
 	// page 60
-	// segment 4
+	// test 4 segment 4
+	0400,
+	020005, 114632,
+	07710,
+	040013, 0,07777,
+	050014, 0,0200,
+	020017, 057,
+	// page 61
+	017310,
+	050014, 0,0,
+	020017, 060,
+
+	// page 62
+	// test 4 segment 5
 	021,
 };
 
@@ -364,7 +401,7 @@ unimplemented(int instr)
 {
 	printf("*** UNIMPLEMENTED: %o [test %d seg %d] ***\n",
 		   instr, testno, testseg);
-	assert(false);
+	//assert(false);
 }
 
 int
@@ -385,20 +422,20 @@ run_test(uint16_t* test)
 		int narg = (w & M_NARG) >> 13;
 		int param = (w & M_PARM) >> 6;
 		uint32_t arg = getarg(loop_var, &test[loc]);
-		printf("exec: %o\n", w);
+		printf("exec: %o ====================\n", w);
 		switch (w & M_CMD) {
-		case NFAILTST:
+		case NFAILTST: // fail
 			puts("nfailtest");
-			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
+			printf("*** TEST %d-%d FAILED: TROUBLE # %d *** (arg %o)\n",
 				   testno, testseg,
-				   100*testno + arg);
+				   100*testno + arg, arg);
 			printf(" online MCHB: %o\n", mchb);
 			if (param == 0) {
 				return arg;
 			}
 			unimplemented(w);
 			break;
-		case NFLBITS:
+		case NFLBITS: // fail bitslice
 			puts("nflbits");
 			// individual trouble number is arg + ordinal of lowest set bit in mchb
 			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
@@ -418,7 +455,8 @@ run_test(uint16_t* test)
 			int C = param & 0037;
 			bool compare;
 			printf(" a=%o b=%o c=%o\n", A, B, C);
-			if (A == 0100) { // A==1, whole register
+			if (A == 0100) { // A==1, whole register.
+				// Parity bits not compared.
 				compare = ((mchb & M_R20) == (arg & M_R20));
 				printf(" compare %o==%o? &%o, %d\n", mchb, arg, mchb&arg, compare);
 			} else { // A == 0, single bit
@@ -449,15 +487,15 @@ run_test(uint16_t* test)
 		case NRETRN:
 			puts("nretrn");
 			switch (param) {
-			case 077:
+			case 077: // MCHB
 				puts(" -mchb");
 				mchb = mch_call(MCH_RTNMCHB, arg) >> 8; break;
-			case 0173:
+			case 0173: // AR
 				puts(" -ar0");
 				// pr-1c912-50 p61
 				unimplemented(w);
 				break;
-			case 0167:
+			case 0167: // BR
 				puts(" -br0");
 				// return br0
 
@@ -466,10 +504,16 @@ run_test(uint16_t* test)
 				// mchb -> mchtr -> return
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
-			case 0137:
+			case 0137: // ER
 				puts(" -er");
-				mchb = mch_call(MCH_RTNER, arg) >> 8; break;
-			default: unimplemented(w);
+				mchb = mch_call(MCH_RTNER, arg) >> 8;
+                                break;
+			default:
+                                unimplemented(w);
+                                // DML
+                                // DML1
+                                // CR
+                                break;
 			}
 			break;
 
@@ -480,6 +524,11 @@ run_test(uint16_t* test)
 				puts(" -ss");
 				mchb = mch_call(MCH_RTNSS, 0) >> 8;
 				break;
+                        default: unimplemented(w);
+                                // R0-R15
+                                // MCS
+                                // MISC
+                                break;
 			}
 			break;
 		case NSTOP:
@@ -494,8 +543,64 @@ run_test(uint16_t* test)
 			printf("*** THIS TEST WILL NEVER WORK ***\n");
 			printf("*** NNO3CD commands require a full emulator ***\n");
 			return -1;
-		case NTESTSEG: testseg = param; break;
-		case NBGN: testno = param; break;
+		case NBGN:
+			/* Sets up a linkage between the diagnostic monitor and
+			 * the diagnostic program.
+			 *
+			 * Also, zero the general and special registers.
+			 */
+			testno = param;
+			// zbr, 2bca
+			mch_call(MCH_LDMIRL, 0x2bca);
+
+			// br0 =e2=> gb =53=> r0
+			mch_call(MCH_LDMIRL, 0x53e2);
+			// br0 =e2=> gb =55=> r1
+			mch_call(MCH_LDMIRL, 0x55e2);
+			// br0 =e2=> gb =56=> r2
+			mch_call(MCH_LDMIRL, 0x56e2);
+			// br0 =e2=> gb =59=> r3
+			mch_call(MCH_LDMIRL, 0x59e2);
+			// br0 =e2=> gb =5a=> r4
+			mch_call(MCH_LDMIRL, 0x5ae2);
+			// br0 =e2=> gb =5c=> r5
+			mch_call(MCH_LDMIRL, 0x5ce2);
+			// br0 =e2=> gb =63=> r6
+			mch_call(MCH_LDMIRL, 0x63e2);
+			// br0 =e2=> gb =65=> r7
+			mch_call(MCH_LDMIRL, 0x65e2);
+			// br0 =e2=> gb =66=> r8
+			mch_call(MCH_LDMIRL, 0x66e2);
+			// br0 =e2=> gb =69=> r9
+			mch_call(MCH_LDMIRL, 0x69e2);
+			// br0 =e2=> gb =6a=> r10
+			mch_call(MCH_LDMIRL, 0x6ae2);
+			// br0 =e2=> gb =6c=> r11
+			mch_call(MCH_LDMIRL, 0x6ce2);
+			// br0 =e2=> gb =47=> r12
+			mch_call(MCH_LDMIRL, 0x47e2);
+			// br0 =e2=> gb =4b=> r13
+			mch_call(MCH_LDMIRL, 0x4be2);
+			// br0 =e2=> gb =4d=> r14
+			mch_call(MCH_LDMIRL, 0x4de2);
+			// br0 =e2=> gb =4e=> r15
+			mch_call(MCH_LDMIRL, 0x4ee2);
+
+			// br0 =e2=> gb =87=> IM
+			mch_call(MCH_LDMIRL, 0x87e2);
+			// br0 =e2=> gb =35=> HG
+			mch_call(MCH_LDMIRL, 0x35e2);
+			// br0 =e2=> gb =33=> CR
+			mch_call(MCH_LDMIRL, 0x33e2);
+			// br0 =e2=> gb =8b=> SS_clr
+			mch_call(MCH_LDMIRL, 0x8be2);
+			// br0 =e2=> gb =18=> IS_clr
+			mch_call(MCH_LDMIRL, 0x18e2);
+
+			break;
+		case NTESTSEG:
+			testseg = param;
+			break;
 		case NMICRO:
 			puts("nmicro");
 			mchb = mch_call(MCH_LDMIRL, arg) >> 8;

@@ -146,8 +146,9 @@ uint32* RAM = NULL;
 
 uint16  mar_jam = 0;
 
-#define UOP(ca,cb, pta,pna, na, to,from) \
-    (uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 | ((uint32)pta)<<29 | ((uint32)pna)<<28 | \
+#define UOP(ca,cb, pta,pna, na, to,from)							\
+    (uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 |					\
+			  ((uint32)pta)<<29 | ((uint32)pna)<<28 |				\
 			  ((uint32)na)<<15 | ((uint32)to)<<7 | ((uint32)from))
 
 CTAB cmds[] = {
@@ -172,7 +173,10 @@ uint32
 mchmsg(uint32 msg)
 {
 	uint8 mcc = msg & 0xff;
-	R[NUM_MCHTR] = msg >> 8 & 0x3fffff;
+	R[NUM_MCHTR] = msg >> 8 & MM_R20;
+
+	printf("mchmsg: msg= %x, mcc= %x, mchtr= %o\n",
+		   msg, mcc, R[NUM_MCHTR]);
 
 	/* see sh B9GJ */
 	switch (mcc) {
@@ -231,6 +235,13 @@ mchmsg(uint32 msg)
 		// 2. run decoders
 		// xxx decoders, or a full machine cycle?
 		seg1_p0();
+                printf("gb = %o\n", gb);
+                seg1_p1();
+                printf("gb = %o\n", gb);
+                seg1_p2();
+                printf("gb = %o\n", gb);
+                seg1_p3();
+                printf("gb = %o\n", gb);
 		break;
 	case MCH_MSTART:
 		// clear FRZ
@@ -374,7 +385,7 @@ cpu_reset(DEVICE* dptr)
 			RAM = (uint32*) calloc((size_t)(MEM_SIZE >> 2), sizeof(uint32));
 		}
 
-#include "ucode-list1.h"
+#include "ucode-list1-literals.h"
 
 		sim_vm_cmd = cmds;
 	}
@@ -399,17 +410,26 @@ sim_instr(void)
 	 * machine cycle.
 	 */
 
+
 	seg0_p0();
+        printf("gb = %o\n", gb);
 	seg1_p0();
+        printf("gb = %o\n", gb);
 
 	seg0_p1();
+        printf("gb = %o\n", gb);
 	seg1_p1();
+        printf("gb = %o\n", gb);
 
 	seg0_p2();
+        printf("gb = %o\n", gb);
 	seg1_p2();
+        printf("gb = %o\n", gb);
 
 	seg0_p3();
+        printf("gb = %o\n", gb);
 	seg1_p3();
+        printf("gb = %o\n", gb);
 
 	return SCPE_OK;
 }
@@ -483,8 +503,8 @@ seg1_p0(void) {
 
 	gb = 0;
 
-#define GB18(from) gb = from
-#define GB22(from) gb = from
+#define GB18(from) gb = (from & MM_R16)
+#define GB22(from) gb = (from & MM_R20)
 
 	/* == from field decoder ==
 	 * ref. sd-1c900-01 sh D13 (note 312)
@@ -516,6 +536,9 @@ seg1_p0(void) {
 	case 0x47: // r12 => gb (18)
 		GB18(R[12]);
 		break;
+	case 0x4b: // r13 => gb (18)
+		GB18(R[13]);
+		break;
 	case 0x4d: // r14 => gb (18)
 		GB18(R[14]);
 		break;
@@ -539,6 +562,7 @@ seg1_p0(void) {
 
 	case 0x33: // cr => gb (22)
 		GB22(R[NUM_CR]);
+		printf("gb %o loaded from cr %o\n", gb, R[NUM_CR]);
 		break;
 	case 0x35: // hg => gb (18)
 		GB18(R[NUM_HG]);
@@ -695,6 +719,7 @@ seg1_p0(void) {
 		break;
 	case 0xe2: // br => gb (22)
 		GB22(R[NUM_BR0]);
+		printf("gb %o loaded from br0 %o\n", gb, R[NUM_BR0]);
 		break;
 	case 0xe4: // really also complicated
 		// xxx
@@ -749,6 +774,9 @@ seg1_p0(void) {
 	case 0x47: // gb => r12 (18)
 		GB18(R[12]);
 		break;
+	case 0x4b: // gb => r13 (18)
+		GB18(R[13]);
+		break;
 	case 0x4d: // gb => r14 (18)
 		GB18(R[14]);
 		break;
@@ -759,13 +787,31 @@ seg1_p0(void) {
 		GB18(R[NUM_IM]);
 		break;
 	case 0x8b: // gb => ss_cl [mr13] (22)
-		// xxx
+		// 18 bit operation on the reset side of ss.
+		// the gating bus must be idle on the prior microcycle to prevent false operation.
+		// this operation does not change bits (15, 19, PL, PH).
+		// bit 15 is connected to the disable I/O flipflop.
+		// bit 19 is connected to the power key.
+		// PL and PH are wired to provide a CC identity code.
+
+		// Controllable bits:
+		// 0001110111111111111111
+#define SS_MASK 0x77fff
+		R[NUM_SS] &= gb & SS_MASK;
+		printf("ss loaded from gb %o=>%o\n", gb, R[NUM_SS]);
+
 		break;
 	case 0x8d: // gb => ms [mr14]
 		GB18(R[NUM_MS]);
 		break;
 	case 0x8e: // gb => ss_st [mr15] (22)
-		// xxx
+		// 18 bit operation on the reset side of ss.
+		// the gating bus must be idle on the prior microcycle to prevent false operation.
+		// this operation does not change bits (15, 19, PL, PH).
+		// bit 15 is connected to the disable I/O flipflop.
+		// bit 19 is connected to the power key.
+		// PL and PH are wired to provide a CC identity code.
+		R[NUM_SS] |= gb & SS_MASK;
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
@@ -777,9 +823,15 @@ seg1_p0(void) {
 		GB18(R[NUM_HG]);
 		break;
 	case 0x36: // gb => is_cl (18)
+		// 18 bit operation on reset side of IS.  the gating bus must
+		// be idle on the prior microcycle to prevent false operation.
+		R[NUM_IS] &= ~gb;
 		// xxx
 		break;
 	case 0x39: // gb => is_s (18)
+		// 18 bit operation on set side of IS.  the gating bus must be
+		// idle on the prior microcycle to prevent false operation.
+		R[NUM_IS] |= gb;
 		// xxx
 		break;
 	case 0x3a: // misc dec col 8
@@ -955,244 +1007,248 @@ misc_dec:
 	;
 	// i got the bytes backwards in the case statement but i'm not
 	// motivated to fix it
-	uint32_t decode_pt = ntohs(mymir.q & 0xffff);
+	uint32_t decode_pt = mymir.q & 0xffff;
 
 	/* xxx concerned that this switch might be slow */
 	switch (decode_pt) {
 
 // row 0, d8
-	case 0xd827: break; // spare
-	case 0xd82b: // pymch
+	case 0x27d8: break; // spare
+	case 0x2bd8: // pymch
 		// gate parity bits from br0 to mchtr
 		R[NUM_MCHTR] = R[NUM_BR0] && (M_PH|M_PL);
 		break;
-	case 0xd82d: // hmrf
+	case 0x2dd8: // hmrf
 		// hardware initialize the 3a cc
         cpu_hmrf();
         break;
-	case 0xd81d: break; // tmch xxx
+	case 0x1dd8: break; // tmch xxx
 		// test the mch
         // gate MCH status to the C register
         // see MDTMCH0 on sh B9GE loc A4
 	case 0xd8d8: break; // idlmch xxx
 		// idle the mch
-	case 0xd8b8: break; // stmch xxx
-	case 0xd878: break; // spare
-	case 0xd8e8: break; // spare
-	case 0xd83a: break; // spare
-	case 0xd83c: break; // sopf xxx
+	case 0xb8d8: break; // stmch xxx
+	case 0x78d8: break; // spare
+	case 0xe8d8: break; // spare
+	case 0x3ad8: break; // spare
+	case 0x3cd8: break; // sopf xxx
 		// set opf
-	case 0xd8cc: break; // zopf xxx
+	case 0xccd8: break; // zopf xxx
 		// clear opf
-	case 0xd8ca: break; // zi xxx
+	case 0xcad8: break; // zi xxx
 		// clear i bit
-	case 0xd8c9: break; // ti xxx
+	case 0xc9d8: break; // ti xxx
 		// test i bit
-	case 0xd81b: break; // si xxx
+	case 0x1bd8: break; // si xxx
 		// set i bit
 
 // row 1, e8
-	case 0xe827: break; // spare
-	case 0xe82b: // zer, clear the error register
+	case 0x27e8: break; // spare
+	case 0x2be8: // zer, clear the error register
         R[NUM_ER] = 0; // xxx this was "0 | M", what is that?
         break;
-	case 0xe82d: break; // zmint, clear the microinterpret bit
+	case 0x2de8: break; // zmint, clear the microinterpret bit
 		R[NUM_SS] &= SR_SS_MINT;
 		break;
-	case 0xe81d: break; // iocc xxx
+	case 0x1de8: break; // iocc xxx
 		// interrupt the other cc
-	case 0xe8d8: break; // zms xxx
+	case 0xd8e8: // zms xxx
 		// clear the maintenance state register
-	case 0xe8b8: // zpt, clear the program timer
+		break;
+	case 0xb8e8: // zpt, clear the program timer
 		R[NUM_TI] &= M_REG_TI;
 		break;
-	case 0xe878: break; // spare
+	case 0x78e8: break; // spare
 	case 0xe8e8: break; // spare
-	case 0xe83a: break; // spare
-	case 0xe83c: break; // ttr2 xxx
-	case 0xe8cc: break; // tdr xxx
+	case 0x3ae8: break; // spare
+	case 0x3ce8: break; // ttr2 xxx
+	case 0xcce8: break; // tdr xxx
 		// test dr
-	case 0xe8ca: break; // ty xxx
-	case 0xe8c9: break; // tx xxx
-	case 0xe81b: // zru (B1GB), clear ru
+	case 0xcae8: break; // ty xxx
+	case 0xc9e8: break; // tx xxx
+	case 0x1be8: // zru (B1GB), clear ru
 		R[NUM_MCS] &= ~( MCS_RU0|MCS_RU1 );
         break;
 
 // row 2, 36
-	case 0x3627: break; // spare
-	case 0x362b: break; // iod => r11 xxx
+	case 0x2736: break; // spare
+	case 0x2b36: break; // iod => r11 xxx
 		// gate the iod to r11
-	case 0x362d: break; // s1db xxx
+	case 0x2d36: break; // s1db xxx
 		// gate switch register 1 to the db
-	case 0x361d: // imtc
+	case 0x1d36: // imtc
 		// idle the mch
 		// force-clear INRFMCH, sh B7GG loc F1
 		break; // xxx
-	case 0x36d8: break; // br => ti xxx
+	case 0xd836: break; // br => ti xxx
 		// gate br to ti (16)
-	case 0x36b8: break; // dml1 => cr xxx
+	case 0xb836: break; // dml1 => cr xxx
 		// gate output of dml1 to cr
-	case 0x3678: break; // md4 stch xxx
+	case 0x7836: break; // md4 stch xxx
 		// start io
-	case 0x36e8: break; // md0 idch xxx
+	case 0xe836: break; // md0 idch xxx
 		// idle io serial channel
-	case 0x363a: break; // spare
-	case 0x363c: break; // ttr1 xxx
-	case 0x36cc: // ds => cf
+	case 0x3a36: break; // spare
+	case 0x3c36: break; // ttr1 xxx
+	case 0xcc36: // ds => cf
 		// gate ds flag to cf
 		R[NUM_MCS] &= ~MCS_CF0;
 		R[NUM_MCS] |= (R[NUM_MCS] & MCS_DS0) >> 1;
 		break;
-	case 0x36ca: break; // tds xxx
-	case 0x36c9: break; // tcf xxx
+	case 0xca36: break; // tds xxx
+	case 0xc936: break; // tcf xxx
 		// test cf
-	case 0x361b: break; // tflz xxx
+	case 0x1b36: break; // tflz xxx
 		// test for low zero in ar
 
 // row 3, 39
-	case 0x3927: break; // spare
-	case 0x392b: break; // sbtc xxx
+	case 0x2739: break; // spare
+	case 0x2b39: break; // sbtc xxx
 		// set block timer check bit
-	case 0x392d: break; // s2db xxx
+	case 0x2d39: break; // s2db xxx
 		// gate switch register 2 to the db
-	case 0x391d: break; // sdis xxx
+	case 0x1d39: break; // sdis xxx
 		// set the disable flip-flop
-	case 0x39d8: break; // inctc xxx
+	case 0xd839: break; // inctc xxx
 		// increment the timing counter
-	case 0x39b8: break; // incpr xxx
+	case 0xb839: break; // incpr xxx
 		// increment the prescaler (part of tc)
-	case 0x3978: break; // md5 eio5 xxx
+	case 0x7839: break; // md5 eio5 xxx
 		// enabli ios to iod
-	case 0x39e8: break; // md1 chtn xxx
+	case 0xe839: break; // md1 chtn xxx
 		// load r9 to ios (normal)
-	case 0x393a: break; // enb xxx
-	case 0x393c: // scf
+	case 0x3a39: break; // enb xxx
+	case 0x3c39: // scf
 		// set cf
 		R[NUM_MCS] |= MCS_CF0|MCS_CF1;
 		break;
-	case 0x39cc: // sds, set ds
+	case 0xcc39: // sds, set ds
 		R[NUM_MCS] |= MCS_DS0|MCS_DS1;
 		break;
-	case 0x39ca: // str1, set tr1
+	case 0xca39: // str1, set tr1
 		R[NUM_MCS] |= MCS_TR10|MCS_TR11;
 		break;
-	case 0x39c9: // str2, set tr2
+	case 0xc939: // str2, set tr2
 		R[NUM_MCS] |= MCS_TR20|MCS_TR21;
 		break;
-	case 0x391b: // sdr, set dr
+	case 0x1b39: // sdr, set dr
 		R[NUM_MCS] |= MCS_DR0|MCS_DR1;
 		break;
 
 // row 4, 3a
-	case 0x3a27: break; // spare
-	case 0x3a2b: break; // spare
-	case 0x3a2d: // mchb => mchtr
+	case 0x273a: break; // spare
+	case 0x2b3a: break; // spare
+	case 0x2d3a: // mchb => mchtr
 		// gate mchb to mchtr [mdcmcbtr0]
 		R[NUM_MCHTR] = R[NUM_MCHB];
 		break;
-	case 0x3a1d: break; // s3db xxx
+	case 0x1d3a: break; // s3db xxx
 		// gate switch register 3 to db
-	case 0x3ad8: break; // rar => fn xxx
+	case 0xd83a: break; // rar => fn xxx
 		// gate rar to fn [mdrarfn0]
-	case 0x3ab8: break; // mclstr xxx
+	case 0xb83a: break; // mclstr xxx
 		// load the start code bit into mch
-	case 0x3a78: break; // md6 raio xxx
+	case 0x783a: break; // md6 raio xxx
 		// enable r10 to iod
-	case 0x3ae8: break; // md2 chtm xxx
+	case 0xe83a: break; // md2 chtm xxx
 		// load r9 to ios (maintenance)
 	case 0x3a3a: break; // ena xxx
-	case 0x3a3c: // zcf, clear cf
+	case 0x3c3a: // zcf, clear cf
 		R[NUM_MCS] &= ~( MCS_CF0|MCS_CF1 );
 		break;
-	case 0x3acc: // zds, clear ds
+	case 0xcc3a: // zds, clear ds
 		R[NUM_MCS] &= ~( MCS_DS0|MCS_DS1 );
 		break;
-	case 0x3aca: // ztr1, clear tr1
+	case 0xca3a: // ztr1, clear tr1
 		R[NUM_MCS] &= ~( MCS_TR10|MCS_TR11 );
 		break;
-	case 0x3ac9: // ztr2, clear tr2
+	case 0xc93a: // ztr2, clear tr2
 		R[NUM_MCS] &= ~( MCS_TR20|MCS_TR21 );
 		break;
-	case 0x3a1b: // zdr, clear dr
+	case 0x1b3a: // zdr, clear dr
 		R[NUM_MCS] &= ~( MCS_DR0|MCS_DR1 );
 		break;
 
 // row 5, 3c
-	case 0x3c27: break; // abrg xxx
-	case 0x3c2b: break; // abr4 xxx
-	case 0x3c2d: break; // abr8 xxx
-	case 0x3c1d: break; // abr12 xxx
-	case 0x3cd8: break; // spare
-	case 0x3cb8: break; // spare
-	case 0x3c78: break; // md7 spa xxx
+	case 0x273c: break; // abrg xxx
+	case 0x2b3c: break; // abr4 xxx
+	case 0x2d3c: break; // abr8 xxx
+	case 0x1d3c: break; // abr12 xxx
+	case 0xd83c: break; // spare
+	case 0xb83c: break; // spare
+	case 0x783c: break; // md7 spa xxx
 		// spare io control
-	case 0x3ce8: break; // md3 chc xxx
+	case 0xe83c: break; // md3 chc xxx
 		// load r9 to ios
-	case 0x3c3a: break; // spare
+	case 0x3a3c: break; // spare
 	case 0x3c3c: break; // tbr0 xxx
 		// test bit 0 of br
-	case 0x3ccc: break; // tint xxx
+	case 0xcc3c: break; // tint xxx
 		// test for interrupts
-	case 0x3cca: break; // tpar xxx
+	case 0xca3c: break; // tpar xxx
 		// test parity bit in br
-	case 0x3cc9: break; // sib => sir1 xxx
-	case 0x3c1b: break; // tch xxx
+	case 0xc93c: break; // sib => sir1 xxx
+	case 0x1b3c: break; // tch xxx
 		// test io channel
 
 // row 6, c9
-	case 0xc927: break; // bar0 xxx
-	case 0xc92b: break; // bar1 xxx
-	case 0xc92d: break; // bar2 xxx
-	case 0xc91d: break; // bar3 xxx
-	case 0xc9d8: break; // zdidk xxx
+	case 0x27c9: break; // bar0 xxx
+	case 0x2bc9: break; // bar1 xxx
+	case 0x2dc9: break; // bar2 xxx
+	case 0x1dc9: break; // bar3 xxx
+	case 0xd8c9: break; // zdidk xxx
 		// clear di1 and dk1
-	case 0xc9b8: break; // dk1 => sdr1 xxx
+	case 0xb8c9: break; // dk1 => sdr1 xxx
 		// gate dk1 to sdr
-	case 0xc978: break; // di1 => sdr1 xxx
+	case 0x78c9: break; // di1 => sdr1 xxx
 		// gate di1 to sdr
-	case 0xc9e8: break; // br => pt xxx
-	case 0xc93a: break; // spare
-	case 0xc93c: break; // opf => ds xxx
+	case 0xe8c9: break; // br => pt xxx
+	case 0x3ac9: break; // spare
+	case 0x3cc9: break; // opf => ds xxx
 		// gate opf to ds
-	case 0xc9cc: break; // spare
-	case 0xc9ca: break; // spare
+	case 0xccc9: break; // spare
+	case 0xcac9: break; // spare
 	case 0xc9c9: break; // tmarp xxx
-	case 0xc91b: break; // exec xxx
+	case 0x1bc9: break; // exec xxx
 		// load a new opcode with servicing interrupts
 
 // row 7, ca
-	case 0xca27: // sbr: set BR data bits, and parity bits
-		R[NUM_BR0] = M_R20 | M_PH | M_PL;
+	case 0x27ca: // sbr
+		// sbr: set BR data bits, and parity bits
+		R[NUM_BR0] = M_PH | M_PL | M_R20;
+		// BR1 doesn't have parity bits, cite sd-1c900-01 sh b2ga loc e1
 		R[NUM_BR1] = M_R20;
+		printf("sbr: br0 %o, br1 %o\n", R[NUM_BR0], R[NUM_BR1]);
 		break;
-	case 0xca2b: // zbr
+	case 0x2bca: // zbr
 		// zbr: clear BR data bits, set ph/pl bits
 		R[NUM_BR0] = 0 | M_PH | M_PL;
 		// BR1 doesn't have parity bits, cite sd-1c900-01 sh b2ga loc e1
 		R[NUM_BR1] = 0 ;
 		break;
-	case 0xca2d: break; // idswq xxx
+	case 0x2dca: break; // idswq xxx
 		// idle the switch sequencer in the mch
-	case 0xca1d: break; // sstp xxx
+	case 0x1dca: break; // sstp xxx
 		// set the stop bit
-	case 0xcad8: break; // stpasw xxx
+	case 0xd8ca: break; // stpasw xxx
 		// initiate a stop and switch to the other cc
-	case 0xcab8: break; // sba xxx
+	case 0xb8ca: break; // sba xxx
 		// set the ba check list
-	case 0xca78: break; // sd => dk+dk1; sa => ak (note 2) xxx
-	case 0xcae8: break; // sd => di+di1 xxx
-	case 0xca3a: break; // srw xxx
-	case 0xca3c: break; // dfetch xxx
-	case 0xcacc: break; // sseiz xxx
+	case 0x78ca: break; // sd => dk+dk1; sa => ak (note 2) xxx
+	case 0xe8ca: break; // sd => di+di1 xxx
+	case 0x3aca: break; // srw xxx
+	case 0x3cca: break; // dfetch xxx
+	case 0xccca: break; // sseiz xxx
 	case 0xcaca: // br => mms xxx
 		// B4GB, loc B0 & B5
 		R[NUM_MMSR] = R[NUM_BR0] & 0xfff;
 		break;
-	case 0xcac9: break; // erar => mar xxx
+	case 0xc9ca: break; // erar => mar xxx
 		// perform an error microsubroutine by gating erar => mar
 		// erarmar00: b1gb, loc d4
 		// b1gd, loc g1
-	case 0xca1b: break; // sbpc xxx
+	case 0x1bca: break; // sbpc xxx
 	}
 }
 	/* ==== CLOCK PHASE 1 START ==== */

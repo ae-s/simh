@@ -1,0 +1,140 @@
+Re-using the Diagnostic Monitor (CDGNM) tests as unit tests.
+
+* Diagnostic table entries, format
+
+[ L | N , N | B , B , B , B , B , B , B | I , I , I , I , I , I ]
+
+L = loop bit, 1 for looping and 0 for nonlooping
+N = number of data words (per loop)
+B = flags, 7 bits worth (instruction specific)
+I = instruction
+
+all numbers are in octal
+
+Instructions
+** 00 NTESTSEG
+** 01 NBEGIN
+   - begin loop
+   - B field is number of iterations
+** 02 NLP_END
+   - end of loop from NBEGIN
+** 03 NTMTEST
+   - Routine to put the offline into a loop for the time specified in
+     microseconds.
+** 04 NPROS
+   - return to call processing for one base level loop
+   - BBBBBB B
+** 05 NMICRO
+   - Transmit a microinstruction over the MCH and cause it to be
+     performed in the off-line.  May be specified as a TO and FROM
+     field which are 8 bits each, or as a 16 bit miscellaneous
+     crosspoint.
+** 06 NSEND
+   - BBBBBBB
+   - Send a 22 bit constant (20 data, 2 parity) into the specified
+     off-line location, such as:
+     - R0-R15
+     - AR in both DMLs
+     - BR in both DMLs
+     - CR C register
+     - AR0 AR in DML0 only
+     - FR function register
+     - B=077 MCHB Maintenance Channel buffer
+** 07 N2SEND
+   - send 16 bits with manual parity
+   - ref pr-1c919-50 p 25
+** 010=8 NRETRN
+   - get a register from offline processor, store in diagnosing mchb
+   - BBBBBBB
+   - B=137 ER
+   - DML
+   - DML1
+   - AR A register copy 0
+   - B=0167 BR B register copy 0 (pr-1c912-50 p49)
+   - CR C register
+   - B=077 MCHB
+** 011=9 N2RETRN
+   - same as NRETRN for:
+   - R0-R15
+   - SS system status
+   - MCS microcontrol status
+   - MISC miscellaneous bits
+** 012=10 NZERO_ER
+   - ref pr-1c912-50 p10
+   - zero the offline error register
+** 013=11 NMASK
+   - AND immed into online mchb
+   - ref pr-1c930-40 p21
+** 014=12 NCOMPARE
+   - compare online mchb to immed
+   - B field: A B CCCCC
+	 - B=0 SUCCES - if equal, skip next table entry
+	 - B=1 - if not equal skip?
+	   - ref pr-1c926-50 p 37
+	 - 054014 00010 1 1 00000 001100
+	 - B=1 
+	 - A=0, CCCCC is a particular bit number
+	 - A=1, whole register
+** 015=13 NEXECUTE
+   - Execute a 3A instruction in the off-line processor.  The
+     associated data (arguments) contains the OP-code and operands for
+     the instruction.  The command will be copied into the off-line's
+     main store followed by a HALT instruction and executed.
+   - NOT used for Branch, MI or MIS instructions.
+** 016=14 NTTY
+   - store contents of online mchb as a data word for tty failure message
+   - ref pr-1c926-50 p 30
+** 017=15 NFAILTST
+   - AAAAA BB
+   - BB=0 failure exit - symbolic trouble number is <immed>
+** 020=16 NFLBITS
+   - something about the failure number is the number of the lowest
+     nonzero bit
+   - ref pr-1c926-50 p 30
+   - BBBBB BB
+** 021=17 NPASSTST
+   - success exit from test
+** 022=18 NADD_OFF
+   - Start the off-line processing code at the specified address in
+     main store.  Clears the IS and ER and can run 3A or Application
+     language (2B code).
+** 023=19 NADMIC
+   - Start the off-line processing microcode at the specified address
+     and clear the ER.
+** 024=20 NLDMIR
+   - load high bits of offline mir with immed
+** 025=21 SKIP
+** 026=22 STRT
+   - Uses the MCH command MSTART to clear the FREEZE flip-flop and
+     allow microcontrol to sequence.
+** 027=23 NSTOP
+   - ref pr-1c912-50 p16 #03
+   - Uses the MCH command MSTOP to set the STOP flip-flop in the SS
+     register.  This causes the MAR to be jammed to the stop address
+     X(0FF) or O(377).
+** 030=24 NZERPT
+** 031=25 NDISABA
+** 032=26 NDISABB
+** 33 NFRZ
+   - load and freeze offline mar with immed
+   - ref pr-1c930-40 p19
+** 34 NSTRTCLK
+   - start the off-line clock
+   - ref pr-1c912-50 p47 #35
+** 36 NRDMICRO
+   - AAAAAA B
+   - return offline micro word addressed in mar
+   - B=0 low half of micro word
+   - B=1 high half of micro word
+** 42 NCLRMS
+   - zero the offline MS register
+   - ref: pr-1c912-50 p42 #15
+** 43 NNO3CD
+   - execute 3a code in diagnosing processor
+   - BBBBBBB
+** 44=36 NRTNBLM
+   - turn off automatic returns to blm every 20 table entries
+   - ref pr-1c926-50 p 43
+** 045=37 NBGN
+   - Initializes the off-line 3A CC at the beginning of each
+     diagnostic test.  Assures the starting place for all tests.
