@@ -92,11 +92,16 @@ typedef uint32_t reg20;
 #define NUM_SIR 42
 #define NUM_SDR 43
 
+// 44 already taken NUM_MCHTR
+
 #define NUM_SW1 45
 #define NUM_SW2 46
 #define NUM_SW3 47
 
-#define NUM_REGISTERS 48
+// xxx randomly snagged this number
+#define NUM_IB 48
+
+#define NUM_REGISTERS 49
 
 
 

@@ -235,13 +235,13 @@ mchmsg(uint32 msg)
 		// 2. run decoders
 		// xxx decoders, or a full machine cycle?
 		seg1_p0();
-                printf("gb = %o\n", gb);
-                seg1_p1();
-                printf("gb = %o\n", gb);
-                seg1_p2();
-                printf("gb = %o\n", gb);
-                seg1_p3();
-                printf("gb = %o\n", gb);
+		printf("gb = %o\n", gb);
+		seg1_p1();
+		printf("gb = %o\n", gb);
+		seg1_p2();
+		printf("gb = %o\n", gb);
+		seg1_p3();
+		printf("gb = %o\n", gb);
 		break;
 	case MCH_MSTART:
 		// clear FRZ
@@ -267,6 +267,7 @@ mchmsg(uint32 msg)
 		break;
 	case MCH_RTNSS:
 		R[NUM_MCHTR] = R[NUM_SS];
+		printf("return ss of %o\n", R[NUM_SS]);
 		break;
 	case MCH_SPCLK:
 		// xxx
@@ -285,6 +286,7 @@ mchmsg(uint32 msg)
 	default: break;
 	}
 
+	printf("mchtr now =%o\n", R[NUM_MCHTR]);
 	return mcc | (R[NUM_MCHTR] << 8);
 }
 
@@ -556,6 +558,7 @@ seg1_p0(void) {
 		break;
 	case 0x8e: // ss [mr15] => gb (18)
 		GB18(R[NUM_SS]);
+		printf("gb %o loaded from ss %o\n", gb, R[NUM_SS]);
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
@@ -659,7 +662,10 @@ seg1_p0(void) {
 		// XXX
 		break;
 	case 0xc6: // ib => gb (18)
-		// XXX
+		// what the hell is IB? is it SIB?
+
+		// NO. IB is Instruction Buffer, explained on b4ga.
+		GB18(R[NUM_IB]);
 		break;
 	case 0xc9: // misc dec row 6
 	case 0xca: // misc dec row 7
@@ -688,7 +694,8 @@ seg1_p0(void) {
 		// yikes? oh. this is for splitting 22-bit addresses into
 		// 16-bit words.
 
-		// xxx
+		// xxx handle the parity correctly
+		GB18(R[NUM_AR0]);
 		break;
 	case 0xb2: // spare
 		break;
@@ -769,7 +776,8 @@ seg1_p0(void) {
 	case 0x2d: // misc dec col 2
 		goto misc_dec;
 	case 0x2e: // gb => sdr0
-		// xxx
+		GB18(R[NUM_SDR]);
+		// xxx not sdr1?
 		break;
 	case 0x47: // gb => r12 (18)
 		GB18(R[12]);
@@ -812,6 +820,7 @@ seg1_p0(void) {
 		// bit 19 is connected to the power key.
 		// PL and PH are wired to provide a CC identity code.
 		R[NUM_SS] |= gb & SS_MASK;
+		printf("ss loaded from gb %o=>%o\n", gb, R[NUM_SS]);
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
@@ -887,7 +896,7 @@ seg1_p0(void) {
 		break;
 	case 0x99: // gb => mchb [mr3] (22)
 		GB22(R[NUM_MCHB]);
-		printf("mchb loaded from gb %d\n", gb);
+		printf("mchb loaded from gb %o\n", gb);
 		break;
 	case 0x9a: // spare
 		break;
@@ -923,7 +932,7 @@ seg1_p0(void) {
 		// xxx
 		break;
 	case 0xc6: // gb => ib (18)
-		// xxx
+		GB18(R[NUM_IB]);
 		break;
 	case 0xc9: // misc dec col 12
 	case 0xca: // misc dec col 11
@@ -953,6 +962,8 @@ seg1_p0(void) {
 		break;
 	case 0xb2: // gb => ar0 (22)
 		// xxx
+		// how is this different from 0xb1? is it just ar0 vs both ar0
+		// and ar1?
 		break;
 	case 0xb4: // complex gating
 		// xxx

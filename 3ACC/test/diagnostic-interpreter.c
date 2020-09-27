@@ -231,6 +231,7 @@ uint16_t test4_cinitial[] = {
 	0114626,
 	0114625,
 	0114706,
+	0114706,
 	0114634,
 	0114643,
 	0114645,
@@ -251,7 +252,7 @@ uint16_t test4_cinitial[] = {
 	// page 60
 	// test 4 segment 4
 	0400,
-	020005, 114632,
+	020005, 0114632,
 	07710,
 	040013, 0,07777,
 	050014, 0,0200,
@@ -421,8 +422,10 @@ run_test(uint16_t* test)
 		bool loop = (w & M_LOOP) == M_LOOP;
 		int narg = (w & M_NARG) >> 13;
 		int param = (w & M_PARM) >> 6;
-		uint32_t arg = getarg(loop_var, &test[loc]);
+		uint32_t arg;
+
 		printf("exec: %o ====================\n", w);
+		arg = getarg(loop_var, &test[loc]);
 		switch (w & M_CMD) {
 		case NFAILTST: // fail
 			puts("nfailtest");
@@ -481,6 +484,8 @@ run_test(uint16_t* test)
 			case 077:
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				break;
+			case 0173:
+				// CR, ref PR-1c915-50 p.19
 			default: unimplemented(w);
 			}
 			break;
@@ -493,7 +498,9 @@ run_test(uint16_t* test)
 			case 0173: // AR
 				puts(" -ar0");
 				// pr-1c912-50 p61
-				unimplemented(w);
+				// ar0 =b1=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x99b1) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			case 0167: // BR
 				puts(" -br0");
@@ -547,7 +554,14 @@ run_test(uint16_t* test)
 			/* Sets up a linkage between the diagnostic monitor and
 			 * the diagnostic program.
 			 *
-			 * Also, zero the general and special registers.
+			 * Also, initialize the registers.
+			 *
+			 * r0-r15 (general): 0
+			 * im hg cr is: 0
+			 * ss: 0440006
+			 * pa sar ib sir ak ai dk di sdr: 0
+			 * ar: 0
+			 * mmsr: 0200
 			 */
 			testno = param;
 			// zbr, 2bca
@@ -592,10 +606,46 @@ run_test(uint16_t* test)
 			mch_call(MCH_LDMIRL, 0x35e2);
 			// br0 =e2=> gb =33=> CR
 			mch_call(MCH_LDMIRL, 0x33e2);
-			// br0 =e2=> gb =8b=> SS_clr
-			mch_call(MCH_LDMIRL, 0x8be2);
 			// br0 =e2=> gb =18=> IS_clr
 			mch_call(MCH_LDMIRL, 0x18e2);
+
+			// load SS to 0440006
+			mch_call(MCH_LDMCHB, 0440006);
+			// mchb =99=> gb =8b=> SS_clr
+			mch_call(MCH_LDMIRL, 0x8b99);
+			// mchb =99=> gb =8e=> SS_st
+			mch_call(MCH_LDMIRL, 0x8e99);
+
+			// br0 =e2=> gb =96=> PA
+			mch_call(MCH_LDMIRL, 0x96e2);
+			// SAR 95
+			mch_call(MCH_LDMIRL, 0x95e2);
+			// IB c6
+			mch_call(MCH_LDMIRL, 0xc6e2);
+			// SIR 1e
+			mch_call(MCH_LDMIRL, 0x1ee2);
+			// AK 9c
+			mch_call(MCH_LDMIRL, 0x9ce2);
+			// AI a3
+			mch_call(MCH_LDMIRL, 0xa3e2);
+			// DK a5
+			mch_call(MCH_LDMIRL, 0xa5e2);
+			// DI a6
+			mch_call(MCH_LDMIRL, 0xa6e2);
+			// SDR 2e
+			mch_call(MCH_LDMIRL, 0x2ee2);
+			// AR b1
+			mch_call(MCH_LDMIRL, 0xb1e2);
+
+			// load MMSR to 0200
+			mch_call(MCH_LDMCHB, 0200);
+			// mchb =99=> gb =71=> br
+			mch_call(MCH_LDMIRL, 0x7199);
+			// br =caca=> MMSR (0200)
+			mch_call(MCH_LDMIRL, 0xcaca);
+
+			// zero out br again
+			mch_call(MCH_LDMIRL, 0x2bca);
 
 			break;
 		case NTESTSEG:
@@ -636,7 +686,8 @@ run_test(uint16_t* test)
 		case NDONE: // hack
 			break;
 		default:
-			unimplemented(w);
+			printf("cur instr %o\n", w);
+			unimplemented(w & M_CMD);
 			break;
 		}
 
