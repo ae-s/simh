@@ -692,7 +692,7 @@ seg1_p0(void) {
 		// ar(ph) xor ar(ph4) => gb(ph)
 
 		// yikes? oh. this is for splitting 22-bit addresses into
-		// 16-bit words.
+		// 16-bit words ("packing").
 
 		// xxx handle the parity correctly
 		GB18(R[NUM_AR0]);
@@ -944,6 +944,7 @@ seg1_p0(void) {
 	case 0x71: // gb => br (22)
 		GB22(R[NUM_BR0]);
 		GB22(R[NUM_BR1]);
+		printf("br %o loaded from gb %o\n", R[NUM_BR0], gb);
 		// yes we have two DML
 		// B2GM loc g0: inh parity xxx
 		break;
@@ -1234,6 +1235,7 @@ misc_dec:
 		break;
 	case 0x2bca: // zbr
 		// zbr: clear BR data bits, set ph/pl bits
+		printf("zbr\n");
 		R[NUM_BR0] = 0 | M_PH | M_PL;
 		// BR1 doesn't have parity bits, cite sd-1c900-01 sh b2ga loc e1
 		R[NUM_BR1] = 0 ;

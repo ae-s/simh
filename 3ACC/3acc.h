@@ -98,10 +98,14 @@ typedef uint32_t reg20;
 #define NUM_SW2 46
 #define NUM_SW3 47
 
-// xxx randomly snagged this number
+// randomly chosen numbers for registers not otherwise listed
+// instruction buffer
 #define NUM_IB 48
+// function register (in dml)
+#define NUM_FR0 49
+#define NUM_FR1 50
 
-#define NUM_REGISTERS 49
+#define NUM_REGISTERS 51
 
 
 

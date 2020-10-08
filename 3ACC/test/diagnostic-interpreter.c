@@ -55,7 +55,7 @@ void cleanup(void);
 #define NPASSTST 021
 #define NADDOFF   18
 #define NADMIC    19
-#define LDMIR     20
+#define NLDMIR    20
 #define NSKIP     21
 #define NSTRT     22
 #define NSTOP    027
@@ -218,6 +218,7 @@ uint16_t test4_cinitial[] = {
 
 	016711,
 	040013, 017,074377,
+	// xxx 02,040006
 	050014, 02,040006,
 
 	// page 56
@@ -264,6 +265,255 @@ uint16_t test4_cinitial[] = {
 
 	// page 62
 	// test 4 segment 5
+	0500,
+	020005, 023712,
+	020005, 0125342,
+	020005, 0114652,
+	07710,
+	050014, 017,
+	// page 63
+	020017, 061,
+	022414, 01,
+	020017, 061,
+	022514, 01,
+	020017, 061,
+	013710,
+	// page 64
+	050014, 017,0177777,
+	020017, 062,
+	022414, 01,
+	020017, 062,
+	022514, 01,
+	// page 65
+	020017, 062,
+
+	021,
+};
+
+// pr-1c915
+uint16_t test9_cdgreg[] = {
+	// page 4
+	01145,
+	// page 5
+	0100,
+	020005, 023712,
+	020005, 051742,
+	02301,
+
+	0120005,
+	052523,
+	053125,
+	054526,
+	055131,
+	056132,
+	061534,
+	062543,
+	063145,
+	064546,
+	// page 6
+	065151,
+	066152,
+	043554,
+	045507,
+	046513,
+	047115,
+	031516,
+	0103463,
+	032607,
+	051465,
+
+	0120005,
+	0114525,
+	0114526,
+	0114531,
+	0114532,
+	0114534,
+	0114543,
+	0114545,
+	0114546,
+	0114551,
+	0114552,
+	0114554,
+	0114507,
+	0114513,
+	0114515,
+	0114516,
+	0114463,
+	0114607,
+	0114465,
+	0114523,
+
+	07710,
+	050014, 0,0177777,
+
+	// page 7
+	020020, 01,
+	022414, 01,
+	// page 8
+	020017, 025,
+	022514, 01,
+	// page 9
+	020017, 026,
+	020005, 025712,
+	020005, 051742,
+	// loop end but the addr doesn't matter
+	// because my interpreter is smart enough to
+	// retain the loop begin point :)
+	040002, /*0,*/ 0,017354,
+
+	020005, 025712,
+	// page 10
+	020005, 051742,
+	02301,
+
+	0120005,
+	052523,
+	053125,
+	054526,
+	055131,
+	056132,
+	061534,
+	062543,
+	063145,
+	064546,
+	065151,
+	066152,
+	043554,
+	045507,
+	046513,
+	047115,
+	031516,
+	0103463,
+	032607,
+	051465,
+
+	0120005,
+	0114525,
+	0114526,
+	0114531,
+	0114532,
+	0114534,
+	0114543,
+	0114545,
+	0114546,
+	0114551,
+	0114552,
+	0114554,
+	0114507,
+	0114513,
+	// page 11
+	0114515,
+	0114516,
+	0114463,
+	0114607,
+	0114465,
+	0114523,
+
+	07710,
+	050014, 0,0,
+	//page 12
+	020020, 01,
+	022414, 01,
+
+	// page 13
+	020017, 025,
+	022514, 01,
+	020017, 026,
+	// page 14
+	020005, 023712,
+	020005, 051742,
+	040002, /*0,*/ 0,017456,
+
+	047706, 0,01401,
+	020005, 051631,
+	02301,
+
+	0120005,
+	052523,
+	053125,
+	054526,
+	055131,
+	056132,
+	061534,
+	062543,
+	063145,
+	064546,
+	065151,
+	// page 15
+	066152,
+	043554,
+	045507,
+	046513,
+	047115,
+	031516,
+	0103463,
+	032607,
+	051465,
+
+	0120005,
+	0114525,
+	0114526,
+	0114531,
+	0114532,
+	0114534,
+	0114543,
+	0114545,
+	0114546,
+	0114551,
+	0114552,
+	0114554,
+	0114507,
+	0114513,
+	0114515,
+	0114516,
+	0114463,
+	0114607,
+	0114465,
+	0114523,
+
+	07710,
+	022414, 0,
+	// page 16
+	020017, 025,
+	022514, 0,
+	// page 17
+	020017, 026,
+	020005, 027512,
+	020005, 051742,
+
+	040002, /*0, */ 0,017561,
+
+	// page 18
+	// segment 2
+	0200,
+	020024, 0153010,
+	012,
+	013710,
+	021114, 0,
+	020017, 027,
+	// page 19
+	020005, 025712,
+	0301,
+	057306, 0,0,
+
+	0155706,
+	017,0177777,
+	0,0,
+	0,0401,
+
+	020005,
+	0134066,
+	015710,
+
+	0150014,
+	017,0177777,
+	0,0,
+	0,0401,
+
+	020020, 030,
+	// page 20
+	040002, /*0,*/ 0,017665,
+
 	021,
 };
 
@@ -288,10 +538,11 @@ main(int argc, char** argv)
 
 	init();
 
-	run_test(test1_cmch);
-	run_test(test2_cbus);
-	run_test(test3_cclock);
-	run_test(test4_cinitial);
+	//run_test(test1_cmch);
+	//run_test(test2_cbus);
+	//run_test(test3_cclock);
+	//run_test(test4_cinitial);
+	run_test(test9_cdgreg);
 }
 
 /* instructions to run that yield a clean environment in the processor
@@ -357,19 +608,21 @@ static uint32_t
 getarg(int loop_var, uint16_t* w)
 {
 	int narg = (w[0] & M_NARG) >> 13;
+	bool multiple = ((w[0] & M_LOOP) == M_LOOP);
 	uint32_t ret = 0;
 	w++;
-	if ((*w & M_LOOP) == M_LOOP) {
+	if (multiple) {
 		if (narg == 1) ret = (uint32_t)w[loop_var];
 		if (narg == 2) ret = (uint32_t)(w[loop_var*2])<<16 |
 						   (uint32_t)(w[loop_var*2+1]);
+		printf("-loop_var=%d\n", loop_var);
 	} else {
 		if (narg == 1) ret = (uint32_t)w[0];
 		if (narg ==2) ret =  (uint32_t)(w[0])<<16 |
 						   (uint32_t)(w[1]);
 	}
 
-	printf("narg=%d so arg=%o\n", narg, ret);
+	printf("-narg=%d so arg=%o\n", narg, ret);
 	return ret;
 }
 
@@ -381,7 +634,7 @@ mch_call(uint32_t cmd, uint32_t data)
 	size_t len;
 	uint32_t response;
 
-	printf("mch call %x\n", message);
+	printf("-mch call %x\n", message);
 	len = fprintf(fd_cmd, "mch %x\n", message);
 	fflush(fd_cmd);
 
@@ -392,7 +645,7 @@ mch_call(uint32_t cmd, uint32_t data)
 		if (num == 0) printf("%s", msg_text);
 		free(msg_text); msg_text = NULL;
 	} while (num == 0);
-	printf("mch resp %x\n", response);
+	printf("-mch resp %x\n", response);
 
 	return response;
 }
@@ -400,7 +653,7 @@ mch_call(uint32_t cmd, uint32_t data)
 void
 unimplemented(int instr)
 {
-	printf("*** UNIMPLEMENTED: %o [test %d seg %d] ***\n",
+	printf("-*** UNIMPLEMENTED: %o [test %d seg %d] ***\n",
 		   instr, testno, testseg);
 	//assert(false);
 }
@@ -415,7 +668,7 @@ run_test(uint16_t* test)
 	uint32_t mchb;
 
 	//sleep(1);
-	printf("running another test ...");
+	printf("-running another test ...");
 
 	while (true) {
 		uint16_t w = (test[loc]);
@@ -424,47 +677,47 @@ run_test(uint16_t* test)
 		int param = (w & M_PARM) >> 6;
 		uint32_t arg;
 
-		printf("exec: %o ====================\n", w);
+		printf("-exec: %o ====================\n", w);
 		arg = getarg(loop_var, &test[loc]);
 		switch (w & M_CMD) {
 		case NFAILTST: // fail
-			puts("nfailtest");
-			printf("*** TEST %d-%d FAILED: TROUBLE # %d *** (arg %o)\n",
+			puts("-nfailtest");
+			printf("-*** TEST %d-%d FAILED: TROUBLE # %d *** (arg %o)\n",
 				   testno, testseg,
 				   100*testno + arg, arg);
-			printf(" online MCHB: %o\n", mchb);
+			printf("- online MCHB: %o\n", mchb);
 			if (param == 0) {
 				return arg;
 			}
 			unimplemented(w);
 			break;
 		case NFLBITS: // fail bitslice
-			puts("nflbits");
+			puts("-nflbits");
 			// individual trouble number is arg + ordinal of lowest set bit in mchb
-			printf("*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
+			printf("-*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
 				   testno, testseg,
 				   100*testno + arg + ffs(mchb));
-			printf(" online MCHB: %o\n", mchb);
+			printf("- online MCHB: %o\n", mchb);
 			return arg + ffs(mchb);
 			break;
 		case NPASSTST:
-			printf("*** TEST %d SEGMENT %d PASSED ***\n", testno, testseg);
+			printf("-*** TEST %d SEGMENT %d PASSED ***\n", testno, testseg);
 			return 0;
 		case NCOMPARE:
-			puts("ncompare");
+			puts("-ncompare");
 		{ // param bitfield is A,BCC,CCC
 			int A = param & 0100; // what to compare
 			int B = param & 0040;
 			int C = param & 0037;
 			bool compare;
-			printf(" a=%o b=%o c=%o\n", A, B, C);
+			printf("- a=%o b=%o c=%o\n", A, B, C);
 			if (A == 0100) { // A==1, whole register.
 				// Parity bits not compared.
 				compare = ((mchb & M_R20) == (arg & M_R20));
-				printf(" compare %o==%o? &%o, %d\n", mchb, arg, mchb&arg, compare);
+				printf("- compare %o==%o? &%o, %d\n", mchb, arg, mchb&arg, compare);
 			} else { // A == 0, single bit
 				compare = (((mchb>>C) & 1) == (arg & 1));
-				printf(" compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
+				printf("- compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
 			}
 			if (B != 0) compare = !compare;
 
@@ -479,76 +732,98 @@ run_test(uint16_t* test)
 			break;
 		}
 		case NSEND:
-			puts("nsend");
+			puts("-nsend");
 			switch (param) {
 			case 077:
+				puts("- -mchb");
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				break;
+			case 0157:
+				// AR0+1, ref PR-1c915-50 p.19 l.20
+				puts("- -ar");
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =b1=> ar
+				mchb = mch_call(MCH_LDMIRL, 0xb199);
+				break;
 			case 0173:
-				// CR, ref PR-1c915-50 p.19
-			default: unimplemented(w);
+				// CR, ref PR-1c915-50 p.19 l.14
+				puts("- -cr");
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =33=> cr
+				mchb = mch_call(MCH_LDMIRL, 0x3399);
+				break;
+			case 0175:
+				// FR, ref PR-1C917-50 p.10
+			default: unimplemented(param);
 			}
 			break;
 		case NRETRN:
-			puts("nretrn");
+			puts("-nretrn");
 			switch (param) {
 			case 077: // MCHB
-				puts(" -mchb");
-				mchb = mch_call(MCH_RTNMCHB, arg) >> 8; break;
+				puts("- -mchb");
+				mchb = mch_call(MCH_RTNMCHB, arg) >> 8;
+				break;
+			case 0137: // ER
+				puts("- -er");
+				mchb = mch_call(MCH_RTNER, arg) >> 8;
+				break;
+			case 0157: // CR
+				// cite pr-1c915-50 p.19 l.33
+				puts("- -cr");
+				// cr0 =33=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x9933) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
+				break;
+			case 0167: // BR
+				puts("- -br0");
+				// return br0
+
+				// br0 =e2=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x99e2) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
+				break;
 			case 0173: // AR
-				puts(" -ar0");
+				puts("- -ar0");
 				// pr-1c912-50 p61
 				// ar0 =b1=> gb =99=> mchb
 				mchb = mch_call(MCH_LDMIRL, 0x99b1) >> 8;
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
-			case 0167: // BR
-				puts(" -br0");
-				// return br0
-
-				// br0 =e2=> gb =99=> mchb
-				mchb = mch_call(MCH_LDMIRL, 0x99e2) >> 8;
-				// mchb -> mchtr -> return
-				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
-				break;
-			case 0137: // ER
-				puts(" -er");
-				mchb = mch_call(MCH_RTNER, arg) >> 8;
-                                break;
 			default:
-                                unimplemented(w);
-                                // DML
-                                // DML1
-                                // CR
-                                break;
+				unimplemented(param);
+				// DML
+				// DML1
+				// CR
+				break;
 			}
 			break;
 
 		case N2RETRN:
-			puts("n2retrn");
+			puts("-n2retrn");
 			switch(param) {
 			case 0167: // system status register
-				puts(" -ss");
+				puts("- -ss");
 				mchb = mch_call(MCH_RTNSS, 0) >> 8;
 				break;
-                        default: unimplemented(w);
-                                // R0-R15
-                                // MCS
-                                // MISC
-                                break;
+			default: unimplemented(param);
+				// R0-R15
+				// MCS
+				// MISC
+				break;
 			}
 			break;
 		case NSTOP:
-			puts("nstop");
+			puts("-nstop");
 			mchb = mch_call(MCH_MSTOP, 0);
 			break;
 		case NFRZ:
-			puts("nfrz");
+			puts("-nfrz");
 			mchb = mch_call(MCH_LDMAR, arg);
 			break;
 		case NNO3CD:
-			printf("*** THIS TEST WILL NEVER WORK ***\n");
-			printf("*** NNO3CD commands require a full emulator ***\n");
+			printf("-*** THIS TEST WILL NEVER WORK ***\n");
+			printf("-*** NNO3CD commands require a full emulator ***\n");
 			return -1;
 		case NBGN:
 			/* Sets up a linkage between the diagnostic monitor and
@@ -652,26 +927,26 @@ run_test(uint16_t* test)
 			testseg = param;
 			break;
 		case NMICRO:
-			puts("nmicro");
+			puts("-nmicro");
 			mchb = mch_call(MCH_LDMIRL, arg) >> 8;
 			break;
 		case NZERO_ER:
-			puts("nzero_er");
+			puts("-nzero_er");
 			mchb = mch_call(MCH_CLER, arg) >> 8;
 			break;
 		case NMASK:
-			puts("nmask");
+			puts("-nmask");
 			mchb &= arg;
 			break;
 		case NBEGIN:
-			puts("nbegin");
+			puts("-nbegin");
 			loop_begin = loc+1;
 			loop_count = param;
 			loop_var = 0;
 			break;
 		case NLP_END:
-			puts("nlp_end");
-			puts("looping!!");
+			puts("-nlp_end");
+			puts("-looping!!");
 			if (loop_count == loop_var+1) {
 				// done
 				loop_count = 1;
@@ -685,8 +960,12 @@ run_test(uint16_t* test)
 			break;
 		case NDONE: // hack
 			break;
+		case NLDMIR:
+			puts("-nldmir");
+			mchb = mch_call(MCH_LDMIRH, arg) >> 8;
+			break;
 		default:
-			printf("cur instr %o\n", w);
+			printf("-cur instr %o\n", w);
 			unimplemented(w & M_CMD);
 			break;
 		}
