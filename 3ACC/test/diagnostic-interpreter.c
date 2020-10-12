@@ -299,8 +299,12 @@ run_test(uint16_t* test)
 					   (loop?loop_count:1), narg);
 				// if true then skip next table entry
 				loc += 1 + (loop?loop_count:1)*narg;
+
+				// same as loop header, sigh
 				w = (test[loc]);
+				loop = (w & M_LOOP) == M_LOOP;
 				narg = (w & M_NARG) >> 13;
+				param = (w & M_PARM) >> 6;
 			}
 			break;
 		}
