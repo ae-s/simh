@@ -104,6 +104,8 @@ typedef uint32_t reg20;
 // function register (in dml)
 #define NUM_FR0 49
 #define NUM_FR1 50
+// six bits, cite sd-1c900-01 sh b2gb loc c4
+#define M_REG_FR 077
 
 #define NUM_REGISTERS 51
 

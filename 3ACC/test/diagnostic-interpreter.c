@@ -81,11 +81,12 @@ void cleanup(void);
 
 int testno, testseg;
 
-//#include "test1_cmch.h"
-//#include "test2_cbus.h"
-//#include "test3_cclock.h"
-//#include "test4_cinitial.h"
+#include "test1_cmch.h"
+#include "test2_cbus.h"
+#include "test3_cclock.h"
+#include "test4_cinitial.h"
 #include "test9_cdgreg.h"
+#include "testdml_cdgfn.h"
 
 int
 main(int argc, char** argv)
@@ -112,12 +113,14 @@ main(int argc, char** argv)
 	//run_test(test2_cbus);
 	//run_test(test3_cclock);
 	//run_test(test4_cinitial);
-	run_test(test9_cdgreg);
+	//run_test(test9_cdgreg);
+	run_test(test12_function_register);
 }
 
 /* instructions to run that yield a clean environment in the processor
  * for testing.  replaces unknown functionality in PR-1C910.
  */
+// xxx todo: duplicated in nbgn, ugh.  clean that up.
 uint16_t init_testseq[] = {
 	/* */
 	OP(2, 0, NSEND), (M_PH|M_PL)>>16, 0,
@@ -313,17 +316,32 @@ run_test(uint16_t* test)
 				puts("- -ar");
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				// mchb =99=> gb =b1=> ar
-				mchb = mch_call(MCH_LDMIRL, 0xb199);
+				mchb = mch_call(MCH_LDMIRL, 0xb199) >> 8;
+				break;
+			case 0167:
+				puts("- -br");
+				// BR0+1, ref PR-1c917-50 p.7 l.35
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =71=> br
+				mchb = mch_call(MCH_LDMIRL, 0x7199) >> 8;
 				break;
 			case 0173:
 				// CR, ref PR-1c915-50 p.19 l.14
 				puts("- -cr");
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				// mchb =99=> gb =33=> cr
-				mchb = mch_call(MCH_LDMIRL, 0x3399);
+				mchb = mch_call(MCH_LDMIRL, 0x3399) >> 8;
 				break;
 			case 0175:
+				puts("- -fr");
 				// FR, ref PR-1C917-50 p.10
+				// both duplicate registers
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =17=> RAR
+				mchb = mch_call(MCH_LDMIRL, 0x1799) >> 8;
+				// rar =d83a=> fn
+				mchb = mch_call(MCH_LDMIRL, 0xd83a) >> 8;
+				break;
 			default: unimplemented(param);
 			}
 			break;
@@ -358,6 +376,22 @@ run_test(uint16_t* test)
 				// pr-1c912-50 p61
 				// ar0 =b1=> gb =99=> mchb
 				mchb = mch_call(MCH_LDMIRL, 0x99b1) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
+				break;
+			case 0175: // DML1
+				puts("- -dml1");
+				// pr-1c917-50 p.8 l.42
+				// dml1 =b836=> cr
+				mchb = mch_call(MCH_LDMIRL, 0xb836) >> 8;
+				// cr =33=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x9933) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
+				break;
+			case 0176: // DML0
+				puts("- -dml0");
+				// pr-1c917-50 p.8 l.12
+				// dml0 =b4=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x99b4) >> 8;
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			default:
@@ -408,6 +442,7 @@ run_test(uint16_t* test)
 			 * ar: 0
 			 * mmsr: 0200
 			 */
+			printf("-nbgn %d\n", param);
 			testno = param;
 			// zbr, 2bca
 			mch_call(MCH_LDMIRL, 0x2bca);
@@ -452,7 +487,8 @@ run_test(uint16_t* test)
 			// br0 =e2=> gb =33=> CR
 			mch_call(MCH_LDMIRL, 0x33e2);
 			// br0 =e2=> gb =18=> IS_clr
-			mch_call(MCH_LDMIRL, 0x18e2);
+			// xxx this causes the from field decoder to wig out?
+			mch_call(MCH_LDMIRL, 0x36e2);
 
 			// load SS to 0440006
 			mch_call(MCH_LDMCHB, 0440006);
@@ -494,6 +530,7 @@ run_test(uint16_t* test)
 
 			break;
 		case NTESTSEG:
+			printf("-ntestseg %d\n", param);
 			testseg = param;
 			break;
 		case NMICRO:
