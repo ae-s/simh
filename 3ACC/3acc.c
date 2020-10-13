@@ -440,6 +440,8 @@ sim_instr(void)
 // dml_output[0] = dml0
 // dml_output[1] = dml1
 // dml_output[2] = bits to set in MCS
+
+// dml is weird; the function register doesn't have a bit 0.
 void
 run_adders(uint32_t* dml_output) {
 	int fr[2] = { NUM_FR0, NUM_FR1 };
@@ -453,10 +455,10 @@ run_adders(uint32_t* dml_output) {
 	dml_output[2] = 0;
 	for (dml = 0; dml < 2; dml++) {
 		// add +1 to the sum, if +1 bit is set
-		uint32_t add1 = R[fr[dml]] & 01;
+		uint32_t add1 = R[fr[dml]] & M_FR_AD1;
 
-		switch (R[fr[dml]] & 06) { // add operation
-		case 04: // add long
+		switch (R[fr[dml]] & (M_FR_ADS|M_FR_ADL)) { // add operation
+		case M_FR_ADL: // add long
 		{
 			uint32_t out
 				= (R[ar[dml]] & M_R20)
@@ -483,7 +485,7 @@ run_adders(uint32_t* dml_output) {
 			}
 			break;
 		}
-		case 02: // add short
+		case M_FR_ADS: // add short
 		{
 			uint32_t out
 				= (R[ar[dml]] & M_R16)
@@ -496,7 +498,7 @@ run_adders(uint32_t* dml_output) {
 			}
 			break;
 		}
-		case 03: // test high 8 bits of AR
+		case M_FR_ADS|M_FR_ADL: // test high 8 bits of AR
 			// see sh b2gd
 			xxx_unimplemented();
 			break;
@@ -504,7 +506,7 @@ run_adders(uint32_t* dml_output) {
 
 		// boolean states
 		// cite SD-1C1900-01 sh B2GB, table A
-		switch ((R[fr[dml]] & 0170) >> 3) {
+		switch ((R[fr[dml]] & M_FR_BOOL) >> 4) {
 		case  0: dml_output[dml] = 0xffff                   ; break;
 		case  1: dml_output[dml] = ~R[ar[dml]] | ~R[br[dml]]; break;
 		case  2: dml_output[dml] = ~R[ar[dml]] |  R[br[dml]]; break;
@@ -524,6 +526,8 @@ run_adders(uint32_t* dml_output) {
 		case 14: dml_output[dml] =  R[ar[dml]] &  R[br[dml]]; break;
 		case 15: dml_output[dml] = 0                        ; break;
 		}
+
+		dml_output[dml] &= M_R20;
 	}
 
 	printf("dml0 output: ar0:%o br0:%o fr0:%o dml0:%o\n",
@@ -576,8 +580,8 @@ void seg0_p0(void) {
 		// enable NA field auxiliary decoder
 		switch (mir.mi.na & 0xf00) {
 		case 0x600: // Load the function register from MIR NA[7-1]
-			R[NUM_FR0] = (mir.mi.na >> 1) & M_REG_FR;
-			R[NUM_FR1] = (mir.mi.na >> 1) & M_REG_FR;
+			R[NUM_FR0] = (mir.mi.na) & M_REG_FR;
+			R[NUM_FR1] = (mir.mi.na) & M_REG_FR;
 			break;
 		case 0x900: // I/O GB parity divert
 			xxx_unimplemented();
@@ -890,7 +894,6 @@ seg1_p0(void) {
 			// xxx from field decode error
 			printf("from field decode error, to=%hx from=%hx\n", mymir.mi.to, mymir.mi.from);
 			xxx_unimplemented();
-
 		}
 	}
 
@@ -908,6 +911,7 @@ seg1_p0(void) {
 	switch ((uint8_t)mymir.mi.to) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // gb(8-19,ph) => rar(0-11,ph) (B1GB)
+		printf("gbxrar %x\n", gb);
 		R[NUM_RAR] = gb >> 8;
 		R[NUM_RAR] |= gb & M_PH;
 		break;
@@ -1285,8 +1289,12 @@ misc_dec:
 		// gate br to ti (16)
 		break;
 	case 0xb836: // dml1 => cr
-		xxx_unimplemented();
+	{
+		uint32_t dml[2];
+		run_adders(dml);
 		// gate output of dml1 to cr
+		R[NUM_CR] = dml[1];
+	}
 		break;
 	case 0x7836: // md4 stch
 		xxx_unimplemented();
@@ -1314,8 +1322,30 @@ misc_dec:
 		// test cf
 		break;
 	case 0x1b36: // tflz
-		xxx_unimplemented();
-		// test for low zero in ar
+		// test for low zero in ar, 16-bit operation
+		// invert, then find first set
+		// ordinal of low zero goes into low 4 bits of BR
+		// if all ones, set DS of MSC register (?)
+		// - (MSC, typo on B2GD loc E9)
+		if ((R[NUM_AR0] & M_R16) == M_R16) {
+			R[NUM_MCS] |= MCS_DS0;
+		} else {
+			// clear bottom 4 bits of BR0
+			R[NUM_BR0] &= MM_R16 ^ 0x000f;
+			// find the result
+			R[NUM_BR0] |= ffs(~(R[NUM_AR0] & M_R16)) & 0x000f;
+		}
+
+		// same business for dml1
+		if ((R[NUM_AR1] & M_R16) == M_R16) {
+			R[NUM_MCS] |= MCS_DS1;
+		} else {
+			// clear bottom 4 bits of BR1
+			R[NUM_BR1] &= MM_R16 ^ 0x000f;
+			// find the result
+			R[NUM_BR1] |= ffs(~(R[NUM_AR1] & M_R16)) & 0x000f;
+		}
+
 		break;
 
 // row 3, 39
@@ -1381,7 +1411,7 @@ misc_dec:
 		break;
 	case 0xd83a: // rar => fn
 		// gate rar to fn [mdrarfn0]
-		printf("mdrarxfn\n");
+		printf("mdrarxfn: %o\n", R[NUM_RAR] & M_REG_FR);
 		R[NUM_FR0] = R[NUM_RAR] & M_REG_FR;
 		R[NUM_FR1] = R[NUM_RAR] & M_REG_FR;
 		break;

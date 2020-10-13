@@ -104,8 +104,13 @@ typedef uint32_t reg20;
 // function register (in dml)
 #define NUM_FR0 49
 #define NUM_FR1 50
-// six bits, cite sd-1c900-01 sh b2gb loc c4
-#define M_REG_FR 077
+// seven bits, cite sd-1c900-01 sh b2gb loc c4
+// dml is kinda weird, the function register doesn't have a bit 0
+#define M_REG_FR 0376
+#define M_FR_AD1 02
+#define M_FR_ADS 04
+#define M_FR_ADL 010
+#define M_FR_BOOL 0360
 
 #define NUM_REGISTERS 51
 

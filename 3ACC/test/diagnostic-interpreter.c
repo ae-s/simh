@@ -123,14 +123,14 @@ main(int argc, char** argv)
 // xxx todo: duplicated in nbgn, ugh.  clean that up.
 uint16_t init_testseq[] = {
 	/* */
-	OP(2, 0, NSEND), (M_PH|M_PL)>>16, 0,
+	//OP(2, 0, NSEND), (M_PH|M_PL)>>16, 0,
 	OP(0,0,NDONE),
 };
 
 void
 init(void)
 {
-	run_test(init_testseq);
+	//run_test(init_testseq);
 }
 
 void
@@ -283,6 +283,7 @@ run_test(uint16_t* test)
 			int B = param & 0040;
 			int C = param & 0037;
 			bool compare;
+			printf("- mchb: %o\n", mchb);
 			printf("- a=%o b=%o c=%o\n", A, B, C);
 			if (A == 0100) { // A==1, whole register.
 				// Parity bits not compared.
@@ -340,7 +341,7 @@ run_test(uint16_t* test)
 				puts("- -fr");
 				// FR, ref PR-1C917-50 p.10
 				// both duplicate registers
-				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				mchb = mch_call(MCH_LDMCHB, arg << 8) >> 8;
 				// mchb =99=> gb =17=> RAR
 				mchb = mch_call(MCH_LDMIRL, 0x1799) >> 8;
 				// rar =d83a=> fn
