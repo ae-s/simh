@@ -37,7 +37,7 @@ uint32 R[NUM_REGISTERS];
  * microcode internal registers are not accessible to the user.
  */
 REG cpu_reg[] = {
-    /* first, general purpose registers */
+	/* first, general purpose registers */
 	{ ORDATAD ( R0, R[0], 18, "General purpose register 0") },
 	{ ORDATAD ( R1, R[1], 18, "General purpose register 1") },
 	{ ORDATAD ( R2, R[2], 18, "General purpose register 2") },
@@ -55,7 +55,7 @@ REG cpu_reg[] = {
 	{ ORDATAD ( R14, R[14], 18, "General purpose register 14") },
 	{ ORDATAD ( R15, R[15], 18, "General purpose register 15") },
 
-    /* then the 16 registers that are accessible from the front panel */
+	/* then the 16 registers that are accessible from the front panel */
 	{ ORDATAD ( MCTL_STAT, R[NUM_MCS], 22, "Microcontrol Status" ) },
 	{ ORDATAD ( TIM, R[NUM_TI], 0, "Timing Counter" ) },
 	{ ORDATAD ( SYS_STAT, R[NUM_SS], 18, "System Status" ) },
@@ -73,9 +73,9 @@ REG cpu_reg[] = {
 	{ ORDATAD ( ADR_MASK, R[NUM_AK], 20, "Address Mask" ) },
 	{ ORDATAD ( ADR_IN, R[NUM_AI], 20, "Address Input" ) },
 
-    /* and now we have some non-user-visible registers, for microcode
-     * shit */
-    // xxx
+	/* and now we have some non-user-visible registers, for microcode
+	 * shit */
+	// xxx
 	{ NULL }
 };
 
@@ -148,7 +148,7 @@ uint32* RAM = NULL;
 uint16  mar_jam = 0;
 
 #define UOP(ca,cb, pta,pna, na, to,from)							\
-    (uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 |					\
+	(uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 |					\
 			  ((uint32)pta)<<29 | ((uint32)pna)<<28 |				\
 			  ((uint32)na)<<15 | ((uint32)to)<<7 | ((uint32)from))
 
@@ -291,48 +291,6 @@ mchmsg(uint32 msg)
 	return mcc | (R[NUM_MCHTR] << 8);
 }
 
-// handwritten boot microcode, from a textual description, in leiu of
-// a dump which hasn't been made yet.
-void
-load_stub_ucode(void)
-{
-    int pos = 0;
-
-    pos = 0277;
-
-    // ZRU i guess
-    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x81, 0xeb);
-
-    // microcode checklist copied from PK-1C900 page B21
-
-    // (a) Initialize RAR.
-	//UCODE[pos++] = UOP();
-    // (b) Save SS —> AI.
-    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xa3, 0x8e);
-    // (c) Clear MRFMCH INHIBIT FF and decoder maintenance status.
-	// IMTC%
-	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x1d, 0x36);
-    // (d) Initialize the first 10 (0-9) I/O main channels.
-    // (e) Initialize the IB and the function register.
-    // (f) Zero SDR1.
-    // (g) Save: PA —> AK, IS —> DI, IM --> DK.
-	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x96, 0x9c); // pa => gb => ak
-	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x8b, 0xa5); // is => gb => di
-	UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0x87, 0xa5); // im => gb => dk
-    // (h) Set interrupt mask to allow panel and other CC interrupts only.
-    // (i) Zero the opcode FIL and I bits.
-    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xcc); // zopf
-    UCODE[pos++] = UOP(0,0, 0,0, pos+1, 0xd8, 0xca); // zi
-
-    // (j) Zero SS register bits AME, DME, HLT, DISP, REJ, and SP2.
-    // (k) Clear the IS.
-    // (l) Set the main memory status register equal to 3CB0.
-    // (m) If the RESET CKT FF equals 1, zero the BIN FF, zero the CC FF, and go to the HALT loop. If the RESET CKT FF equals 0, go to (n) .
-    // (n) Enable I/O and then send a main store initialization message twice.
-    // (o) If the ISC1 equal to 0, set ISC1 equal to 1 and begin the main memory initialization program at location 20 hex (40 octal) If the ISC1 equals 1, idle the maintenance channel switch sequencer and proceed to (p)
-    // (p) If ISC2 equals 0, set ISC2 equal to 1, set ISC1 equal to and stop and switch to other CC. If ISC2 equals 1, SS —> BR and reload main memory from tape (IPL SEQ).
-}
-
 /* hardware reset logic: pr-1c900-01 p B20 */
 void cpu_hardware_switch(void)
 {
@@ -393,7 +351,7 @@ cpu_reset(DEVICE* dptr)
 		sim_vm_cmd = cmds;
 	}
 
-    cpu_hmrf();
+	cpu_hmrf();
 	return SCPE_OK;
 }
 
@@ -415,24 +373,24 @@ sim_instr(void)
 
 
 	seg0_p0();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 	seg1_p0();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 
 	seg0_p1();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 	seg1_p1();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 
 	seg0_p2();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 	seg1_p2();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 
 	seg0_p3();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 	seg1_p3();
-        printf("gb = %o\n", gb);
+	printf("gb = %o\n", gb);
 
 	return SCPE_OK;
 }
@@ -625,7 +583,7 @@ void seg0_p0(void) {
 		mar = 00777; // hardwired, see sh B1GN loc E8
 	}
 
-    /* allow the MRF to chime in too; see function cpu_reset */
+	/* allow the MRF to chime in too; see function cpu_reset */
 	mar |= mar_jam;
 }
 
@@ -1185,13 +1143,13 @@ misc_dec:
 		break;
 	case 0x2dd8: // hmrf
 		// hardware initialize the 3a cc
-        cpu_hmrf();
-        break;
+		cpu_hmrf();
+		break;
 	case 0x1dd8: // tmch
 		xxx_unimplemented();
 		// test the mch
-        // gate MCH status to the C register
-        // see MDTMCH0 on sh B9GE loc A4
+		// gate MCH status to the C register
+		// see MDTMCH0 on sh B9GE loc A4
 		break;
 	case 0xd8d8: // idlmch
 		xxx_unimplemented();
@@ -1231,8 +1189,8 @@ misc_dec:
 	case 0x27e8: // spare
 		break;
 	case 0x2be8: // zer, clear the error register
-        R[NUM_ER] = 0; // xxx this was "0 | M", what is that?
-        break;
+		R[NUM_ER] = 0; // xxx this was "0 | M", what is that?
+		break;
 	case 0x2de8: // zmint, clear the microinterpret bit
 		R[NUM_SS] &= SR_SS_MINT;
 		break;
@@ -1265,7 +1223,7 @@ misc_dec:
 		break;
 	case 0x1be8: // zru (B1GB), clear ru
 		R[NUM_MCS] &= ~( MCS_RU0|MCS_RU1 );
-        break;
+		break;
 
 // row 2, 36
 	case 0x2736: // spare
@@ -1623,7 +1581,7 @@ void seg1_p2(void) {}
 	/* ==== CLOCK PHASE 3 START ==== */
 
 	/* **** microinstruction pipeline, stage 1 **** */
-    // microinstruction pipeline, stage 1
+// microinstruction pipeline, stage 1
 void seg0_p3(void) {
 	/* many ff's are cleared late in the microcycle, during phase P3.
 	 * cite: sh B1GH, loc F0-F8 */
@@ -1635,12 +1593,12 @@ void seg0_p3(void) {
 	uff.smint = FALSE;
 
 	// "microstore output stable", sh b1gc
-    // shove these into registers that phase 2 will see next cycle
+	// shove these into registers that phase 2 will see next cycle
 	mir.q = UCODE[mar];
-    R[NUM_MIR] = mir.q;
+	R[NUM_MIR] = mir.q;
 	R[NUM_MAR] = mar;
 
-    mar_jam = 0;
+	mar_jam = 0;
 }
 
 	/* **** microinstruction pipeline, stage 2 **** */

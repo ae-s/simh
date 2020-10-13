@@ -120,7 +120,7 @@ main(int argc, char** argv)
 /* instructions to run that yield a clean environment in the processor
  * for testing.  replaces unknown functionality in PR-1C910.
  */
-// xxx todo: duplicated in nbgn, ugh.  clean that up.
+// xxx todo: duplicate functionality in NBGN, ugh.  clean that up.
 uint16_t init_testseq[] = {
 	/* */
 	//OP(2, 0, NSEND), (M_PH|M_PL)>>16, 0,
