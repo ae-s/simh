@@ -1289,21 +1289,27 @@ misc_dec:
 		// - (MSC, typo on B2GD loc E9)
 		if ((R[NUM_AR0] & M_R16) == M_R16) {
 			R[NUM_MCS] |= MCS_DS0;
+			printf("tflz0: all1\n");
 		} else {
+			int z = ffs(~(R[NUM_AR0] & M_R16)) - 1;
 			// clear bottom 4 bits of BR0
 			R[NUM_BR0] &= MM_R16 ^ 0x000f;
 			// find the result
-			R[NUM_BR0] |= ffs(~(R[NUM_AR0] & M_R16)) & 0x000f;
+			R[NUM_BR0] |= z & 0x000f;
+			printf("tflz0: %d\n", z);
 		}
 
 		// same business for dml1
 		if ((R[NUM_AR1] & M_R16) == M_R16) {
 			R[NUM_MCS] |= MCS_DS1;
+			printf("tflz1: all1\n");
 		} else {
+			int z = ffs(~(R[NUM_AR1] & M_R16)) - 1;
 			// clear bottom 4 bits of BR1
 			R[NUM_BR1] &= MM_R16 ^ 0x000f;
 			// find the result
-			R[NUM_BR1] |= ffs(~(R[NUM_AR1] & M_R16)) & 0x000f;
+			R[NUM_BR1] |= z & 0x000f;
+			printf("tflz1: %d\n", ffs(~(R[NUM_AR1] & M_R16)));
 		}
 
 		break;
