@@ -112,6 +112,7 @@ typedef uint32_t reg20;
 #define M_FR_AD1    02
 #define M_FR_ADS    04
 #define M_FR_ADL   010
+#define M_FR_ADD   016
 #define M_FR_BOOL 0360
 
 #define NUM_REGISTERS 51

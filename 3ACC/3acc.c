@@ -413,7 +413,7 @@ run_adders(uint32_t* dml_output) {
 	dml_output[2] = 0;
 	for (dml = 0; dml < 2; dml++) {
 		// add +1 to the sum, if +1 bit is set
-		uint32_t add1 = R[fr[dml]] & M_FR_AD1;
+		uint32_t add1 = (R[fr[dml]] & M_FR_AD1) ? 1 : 0;
 
 		switch (R[fr[dml]] & (M_FR_ADS|M_FR_ADL)) { // add operation
 		case M_FR_ADL: // add long
@@ -423,6 +423,7 @@ run_adders(uint32_t* dml_output) {
 				+ (R[br[dml]] & M_R20)
 				+ add1;
 			dml_output[dml] = out & M_R20;
+			printf("out%d = %o\n", dml, dml_output[dml]);
 			// handle carry out, gated into MCS register
 			// sh b2ge loc h5: "CARH01" out from adder
 			// sh b2ca loc b6: "CCAR191" at loc 5h0
@@ -464,6 +465,7 @@ run_adders(uint32_t* dml_output) {
 
 		// boolean states
 		// cite SD-1C1900-01 sh B2GB, table A
+		if ((R[fr[dml]] & M_FR_ADD) == 0)
 		switch ((R[fr[dml]] & M_FR_BOOL) >> 4) {
 		case  0: dml_output[dml] = 0xffff                   ; break;
 		case  1: dml_output[dml] = ~R[ar[dml]] | ~R[br[dml]]; break;
