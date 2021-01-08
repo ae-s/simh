@@ -405,12 +405,19 @@ run_adders(uint32_t* dml_output) {
 	int fr[2] = { NUM_FR0, NUM_FR1 };
 	int ar[2] = { NUM_AR0, NUM_AR1 };
 	int br[2] = { NUM_BR0, NUM_BR1 };
+	// mask for DS which is parameterized by which DML# ran into
+	// an overflow.  normally both but, this being bell labs, you
+	// never know.
 	uint32_t m_ds[2] = {MCS_DS0, MCS_DS1};
 	int dml = 0;
 
 	dml_output[0] = 0;
 	dml_output[1] = 0;
 	dml_output[2] = 0;
+	// the adders are SLIGHTLY DIFFERENT, though they do both run
+	// concurrently.  i have chosen to express this by way of a
+	// for-loop (that runs exactly two times, once for each adder)
+	// and some conditionals and indexing.
 	for (dml = 0; dml < 2; dml++) {
 		// add +1 to the sum, if +1 bit is set
 		uint32_t add1 = (R[fr[dml]] & M_FR_AD1) ? 1 : 0;
@@ -794,15 +801,17 @@ seg1_p0(void) {
 		break;
 	case 0xb2: // spare
 		break;
-	case 0xb4: // dml => gb (22)
+	case 0xb4: // dml => gb (22) // dml%f
 	{
-		uint32_t dml[2];
+		// uctl [F]
+		// uctl [G]
+		uint32_t dml[3] = {0,0,0};
 		run_adders(dml);
-
-		// xxx check parity business?
+		// xxx compute parity
 
 		// finish
 		GB22(dml[0]);
+		R[NUM_MCS] &= ~(MCS_DS0|MCS_DS1);
 		R[NUM_MCS] |= dml[2];
 	}
 		break;
@@ -844,15 +853,16 @@ seg1_p0(void) {
 		/* next we have the all-zeros conditions */
 
 	default:
-		if (mir.mi.from & 0xf0 == 0) {
+		if ((mymir.mi.from & 0x0f) == 0) {
 			// f4o4l0
 			// nop
-		} else if (mir.mi.from & 0x0f == 0) {
+		} else if ((mymir.mi.from & 0xf0) == 0) {
 			// f4o4r0
 			// spare
 		} else {
 			// xxx from field decode error
-			printf("from field decode error, to=%hx from=%hx\n", mymir.mi.to, mymir.mi.from);
+			printf("from field decode error, to=%hx from=%hx\n",
+			       mymir.mi.to, mymir.mi.from);
 			xxx_unimplemented();
 		}
 	}
@@ -1111,14 +1121,15 @@ seg1_p0(void) {
 		/* next we have the all-zeros conditions */
 
 	default:
-		if (mir.mi.from & 0xf0 == 0) {
+		if ((mymir.mi.to & 0x0f) == 0) {
 			// nop
-		} else if (mir.mi.from & 0x0f == 0) {
+		} else if ((mymir.mi.to & 0xf0) == 0) {
 			// gate br(15) to br(16-19)
 			xxx_unimplemented();
 		} else {
 			// to field decode error
-			printf("to field decode error, to=%hx from=%hx\n", mymir.mi.to, mymir.mi.from);
+			printf("to field decode error, to=%hx from=%hx\n",
+			       mymir.mi.to, mymir.mi.from);
 			xxx_unimplemented();
 		}
 	}
@@ -1282,11 +1293,14 @@ misc_dec:
 		// test cf
 		break;
 	case 0x1b36: // tflz
+		// uctl [E]
+
 		// test for low zero in ar, 16-bit operation
 		// invert, then find first set
 		// ordinal of low zero goes into low 4 bits of BR
 		// if all ones, set DS of MSC register (?)
 		// - (MSC, typo on B2GD loc E9)
+		// if not all ones, clear DS
 		if ((R[NUM_AR0] & M_R16) == M_R16) {
 			R[NUM_MCS] |= MCS_DS0;
 			printf("tflz0: all1\n");
@@ -1296,6 +1310,7 @@ misc_dec:
 			R[NUM_BR0] &= MM_R16 ^ 0x000f;
 			// find the result
 			R[NUM_BR0] |= z & 0x000f;
+			R[NUM_MCS] &= ~MCS_DS0;
 			printf("tflz0: %d\n", z);
 		}
 
@@ -1309,6 +1324,7 @@ misc_dec:
 			R[NUM_BR1] &= MM_R16 ^ 0x000f;
 			// find the result
 			R[NUM_BR1] |= z & 0x000f;
+			R[NUM_MCS] &= ~MCS_DS1;
 			printf("tflz1: %d\n", ffs(~(R[NUM_AR1] & M_R16)));
 		}
 
@@ -1439,14 +1455,17 @@ misc_dec:
 	case 0x3c3c: // tbr0
 		xxx_unimplemented();
 		// test bit 0 of br
+		// uctl [D]
 		break;
 	case 0xcc3c: // tint
 		xxx_unimplemented();
 		// test for interrupts
+		// uctl [C]
 		break;
 	case 0xca3c: // tpar
 		xxx_unimplemented();
 		// test parity bit in br
+		// uctl [A]
 		break;
 	case 0xc93c: // sib => sir1
 		xxx_unimplemented();
@@ -1454,6 +1473,7 @@ misc_dec:
 	case 0x1b3c: // tch
 		xxx_unimplemented();
 		// test io channel
+		// uctl [B]
 		break;
 
 // row 6, c9

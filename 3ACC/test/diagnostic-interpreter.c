@@ -115,6 +115,7 @@ main(int argc, char** argv)
 	//run_test(test4_cinitial);
 	//run_test(test9_cdgreg);
 	run_test(test12_function_register);
+	run_test(test13_adder);
 }
 
 /* instructions to run that yield a clean environment in the processor
@@ -414,6 +415,12 @@ run_test(uint16_t* test)
 			case 0167: // system status register
 				puts("- -ss");
 				mchb = mch_call(MCH_RTNSS, 0) >> 8;
+				break;
+			case 0173: // microcontrol status register
+				puts("- -mcs");
+				// mcs =74=> gb =99=> mchb
+				mchb = mch_call(MCH_LDMIRL, 0x9974) >> 8;
+				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			default: unimplemented(param);
 				// R0-R15
