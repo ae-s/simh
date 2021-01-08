@@ -142,15 +142,12 @@ struct {
 } uff;
 
 #define UCODE_LEN 1<<12
-uint32 UCODE[2048];
+uint32 UCODE[0x1000];
 uint32* RAM = NULL;
 
-uint16  mar_jam = 0;
+#include "microcode.h"
 
-#define UOP(ca,cb, pta,pna, na, to,from)							\
-	(uint32) (((uint32)ca)<<31 | ((uint32)cb)<<30 |					\
-			  ((uint32)pta)<<29 | ((uint32)pna)<<28 |				\
-			  ((uint32)na)<<15 | ((uint32)to)<<7 | ((uint32)from))
+uint16  mar_jam = 0;
 
 CTAB cmds[] = {
 	{ "mch", mchmsg_cmd, 0,
@@ -346,7 +343,7 @@ cpu_reset(DEVICE* dptr)
 			RAM = (uint32*) calloc((size_t)(MEM_SIZE >> 2), sizeof(uint32));
 		}
 
-#include "ucode-list1-literals.h"
+		init_ucode();
 
 		sim_vm_cmd = cmds;
 	}
@@ -471,7 +468,7 @@ run_adders(uint32_t* dml_output) {
 		}
 
 		// boolean states
-		// cite SD-1C1900-01 sh B2GB, table A
+		// cite SD-1C900-01 sh B2GB, table A
 		if ((R[fr[dml]] & M_FR_ADD) == 0)
 		switch ((R[fr[dml]] & M_FR_BOOL) >> 4) {
 		case  0: dml_output[dml] = 0xffff                   ; break;
@@ -1631,4 +1628,11 @@ void seg0_p3(void) {
 
 	/* **** microinstruction pipeline, stage 2 **** */
 void seg1_p3(void) {}
+
+/* 
+ * Local Variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ */
 
