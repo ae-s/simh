@@ -114,8 +114,9 @@ main(int argc, char** argv)
 	//run_test(test3_cclock);
 	//run_test(test4_cinitial);
 	//run_test(test9_cdgreg);
-	run_test(test12_function_register);
-	run_test(test13_adder);
+	//run_test(test12_function_register);
+	//run_test(test13_adder);
+        run_test(test14_dml_comparitor);
 }
 
 /* instructions to run that yield a clean environment in the processor
@@ -263,6 +264,7 @@ run_test(uint16_t* test)
 			if (param == 0) {
 				return arg;
 			}
+                        puts("u1");
 			unimplemented(w);
 			break;
 		case NFLBITS: // fail bitslice
@@ -317,6 +319,13 @@ run_test(uint16_t* test)
 				puts("- -mchb");
 				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
 				break;
+			case 0137:
+				// AR0, ref PR-1c917-50 p.35 l.40
+				puts("- -ar0");
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =b2=> ar0
+				mchb = mch_call(MCH_LDMIRL, 0xb299) >> 8;
+				break;
 			case 0157:
 				// AR0+1, ref PR-1c915-50 p.19 l.20
 				puts("- -ar");
@@ -348,7 +357,9 @@ run_test(uint16_t* test)
 				// rar =d83a=> fn
 				mchb = mch_call(MCH_LDMIRL, 0xd83a) >> 8;
 				break;
-			default: unimplemented(param);
+			default:
+                                puts("u2");
+                                unimplemented(param);
 			}
 			break;
 		case NRETRN:
@@ -401,6 +412,7 @@ run_test(uint16_t* test)
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			default:
+                                puts("u3");
 				unimplemented(param);
 				// DML
 				// DML1
@@ -422,7 +434,9 @@ run_test(uint16_t* test)
 				mchb = mch_call(MCH_LDMIRL, 0x9974) >> 8;
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
-			default: unimplemented(param);
+			default:
+                                puts("u4");
+                                unimplemented(param);
 				// R0-R15
 				// MCS
 				// MISC
@@ -585,6 +599,7 @@ run_test(uint16_t* test)
 			break;
 		default:
 			printf("-cur instr %o\n", w);
+                        puts("u5");
 			unimplemented(w & M_CMD);
 			break;
 		}
@@ -592,3 +607,11 @@ run_test(uint16_t* test)
 		loc += 1 + (loop?loop_count:1)*narg;
 	}
 }
+/* 
+ * Local Variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ */
+

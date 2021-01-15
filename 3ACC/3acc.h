@@ -182,7 +182,7 @@ REGBITS_20(SR_ER,
         T4o8, F4o8, // 4-of-8 decode errors
         IBPL, // bad low parity in IB register
         GBPT, // bad parity on gating bus
-        DML,
+        DML, // mismatch in dml
         MARPT, // bad parity in MAR
         CLK, // clock error
         S0ERA, // store 0 (my), error A

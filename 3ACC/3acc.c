@@ -445,6 +445,7 @@ run_adders(uint32_t* dml_output) {
 			// sh b1gl:
 			if (out & 0x100000) {
 				dml_output[2] |= m_ds[dml];
+				printf("dml%d overflow long\n", dml);
 			}
 			break;
 		}
@@ -458,6 +459,7 @@ run_adders(uint32_t* dml_output) {
 			// handle carry out, gated into DS register
 			if (out & 0x10000) {
 				dml_output[2] |= m_ds[dml];
+				printf("dml%d overflow short\n", dml);
 			}
 			break;
 		}
@@ -499,6 +501,7 @@ run_adders(uint32_t* dml_output) {
 	printf("dml1 output: ar1:%o br1:%o fr1:%o dml1:%o\n",
 		   R[NUM_AR1], R[NUM_BR1], R[NUM_FR1], dml_output[1]);
 }
+
 	/* ==== CLOCK PHASE 0 START ====
 	 * ==== CLOCK PHASE 0 START ====
 	 * ==== CLOCK PHASE 0 START ====
@@ -605,6 +608,9 @@ seg1_p0(void) {
 
 #define GB18(from) gb = (from & MM_R16)
 #define GB22(from) gb = (from & MM_R20)
+
+	printf(":: f%%%02x => t%%%02x\n", (int)mymir.mi.from, (int)mymir.mi.to);
+	printf(":: mcs %o\n", (int)R[NUM_MCS]);
 
 	/* == from field decoder ==
 	 * ref. sd-1c900-01 sh D13 (note 312)
@@ -776,7 +782,25 @@ seg1_p0(void) {
 		/* next 16 listed are 3o4 L and 1o4 R */
 
 	case 0x71: // ar => gb (22)
+		// why is the test failing. is something hinky going on?
+
+		// f3o4l7 f1o4r1
+		// far farl farh, on sh b2gm
+		// A register => leads AR1xx1
+		// "to rotate logic (dml1) and to find low zero logic (dml1)"
+
+		// nope yeah, on b2gb it shows as just gates PH,PL,19-0
+		// directly from AR to GB, with matcher enabled
 		GB22(R[NUM_AR0]);
+		// matcher
+		// xxx this is probably wrong?
+		if ((gb ^ R[NUM_AR1]) != 0) {
+			puts("MATCH AR FAIL TRIP");
+            R[NUM_ER] |= SR_ER_DML;
+        } else {
+			puts("MATCH AR: OK");
+		}
+
 		break;
 	case 0x72: // spare
 		break;
@@ -806,8 +830,19 @@ seg1_p0(void) {
 		run_adders(dml);
 		// xxx compute parity
 
-		// finish
+		// gate out
 		GB22(dml[0]);
+
+        // matcher
+		// see sh b2gr
+        if ((gb ^ dml[1]) != 0) {
+			puts("MATCH DML FAIL TRIP");
+            R[NUM_ER] |= SR_ER_DML;
+        } else {
+			puts("MATCH DML: OK");
+		}
+
+		// finish
 		R[NUM_MCS] &= ~(MCS_DS0|MCS_DS1);
 		R[NUM_MCS] |= dml[2];
 	}
@@ -839,6 +874,14 @@ seg1_p0(void) {
 	case 0xe2: // br => gb (22)
 		GB22(R[NUM_BR0]);
 		printf("gb %o loaded from br0 %o\n", gb, R[NUM_BR0]);
+		// matcher
+		// xxx this is probably wrong?
+		if ((gb ^ R[NUM_BR1]) != 0) {
+			puts("MATCH BR FAIL TRIP");
+            R[NUM_ER] |= SR_ER_DML;
+        } else {
+			puts("MATCH BR: OK");
+		}
 		break;
 	case 0xe4: // really also complicated
 		xxx_unimplemented();
@@ -1279,6 +1322,7 @@ misc_dec:
 		break;
 	case 0xcc36: // ds => cf
 		// gate ds flag to cf
+        // uctl [J]
 		R[NUM_MCS] &= ~MCS_CF0;
 		R[NUM_MCS] |= (R[NUM_MCS] & MCS_DS0) >> 1;
 		break;
@@ -1426,16 +1470,21 @@ misc_dec:
 		break;
 
 // row 5, 3c
-	case 0x273c: // abrg
-		xxx_unimplemented();
+	case 0x273c: // abr0
+		// ar => br, rotate 0
+		R[NUM_BR0] = R[NUM_AR0] & 0x00ffff;
+		R[NUM_BR1] = R[NUM_AR1] & 0x00ffff;
 		break;
 	case 0x2b3c: // abr4
+		// ar => br, rotate 4
 		xxx_unimplemented();
 		break;
 	case 0x2d3c: // abr8
+		// ar => br, rotate 8
 		xxx_unimplemented();
 		break;
 	case 0x1d3c: // abr12
+		// ar => br, rotate 12
 		xxx_unimplemented();
 		break;
 	case 0xd83c: break; // spare
@@ -1475,15 +1524,20 @@ misc_dec:
 
 // row 6, c9
 	case 0x27c9: // bar0
-		xxx_unimplemented();
+		// br => ar, rotate 0
+		R[NUM_AR0] = R[NUM_BR0] & 0x00ffff;
+		R[NUM_AR1] = R[NUM_BR1] & 0x00ffff;
 		break;
 	case 0x2bc9: // bar1
+		// br => ar, rotate 1
 		xxx_unimplemented();
 		break;
 	case 0x2dc9: // bar2
+		// br => ar, rotate 2
 		xxx_unimplemented();
 		break;
 	case 0x1dc9: // bar3
+		// br => ar, rotate 3
 		xxx_unimplemented();
 		break;
 	case 0xd8c9: // zdidk
@@ -1633,6 +1687,7 @@ void seg1_p3(void) {}
  * Local Variables:
  * tab-width: 4
  * c-basic-offset: 4
+ * indent-tabs-mode: t
  * End:
  */
 
