@@ -92,31 +92,38 @@ int
 main(int argc, char** argv)
 {
 	int fd;
+	int run_test_no = 0;
 
-#if FILE_TABLE
-	if (argc == 1) {
-		printf("need an argument, of filename contain test to run\n");
-		return -1;
+	if (argc == 2) {
+		run_test_no = atoi(argv[1]);
+	} else {
+		run_test_no = 14;
 	}
-	fd = open((const char*)argv[1], O_RDONLY);
-
-	// n.b. 1024 bytes max, so 512 words
-	table = mmap(NULL, 1024, PROT_READ, MAP_SHARED, fd, 0);
-#endif
 
 	atexit(&cleanup);
 	start_simh();
 
 	init();
 
-	//run_test(test1_cmch);
-	//run_test(test2_cbus);
-	//run_test(test3_cclock);
-	//run_test(test4_cinitial);
-	//run_test(test9_cdgreg);
-	//run_test(test12_function_register);
-	//run_test(test13_adder);
-        run_test(test14_dml_comparitor);
+	switch (run_test_no) {
+	case 1:
+		return run_test(test1_cmch);
+	case 2:
+		return run_test(test2_cbus);
+	case 3:
+		return run_test(test3_cclock);
+	case 4:
+		return run_test(test4_cinitial);
+	case 9:
+		return run_test(test9_cdgreg);
+	case 12:
+		return run_test(test12_function_register);
+	case 13:
+		return run_test(test13_adder);
+	case 14:
+		return run_test(test14_dml_comparitor);
+	default: break;
+	}
 }
 
 /* instructions to run that yield a clean environment in the processor
@@ -197,7 +204,7 @@ getarg(int loop_var, uint16_t* w)
 						   (uint32_t)(w[1]);
 	}
 
-	printf("-narg=%d so arg=%o\n", narg, ret);
+	printf("-narg=%d so arg=o%o\n", narg, ret);
 	return ret;
 }
 
@@ -209,7 +216,7 @@ mch_call(uint32_t cmd, uint32_t data)
 	size_t len;
 	uint32_t response;
 
-	printf("-mch call %x\n", message);
+	printf("-mch call %#x\n", message);
 	len = fprintf(fd_cmd, "mch %x\n", message);
 	fflush(fd_cmd);
 
@@ -220,7 +227,7 @@ mch_call(uint32_t cmd, uint32_t data)
 		if (num == 0) printf("%s", msg_text);
 		free(msg_text); msg_text = NULL;
 	} while (num == 0);
-	printf("-mch resp %x\n", response);
+	printf("-mch resp %#x\n", response);
 
 	return response;
 }
@@ -228,7 +235,7 @@ mch_call(uint32_t cmd, uint32_t data)
 void
 unimplemented(int instr)
 {
-	printf("-*** UNIMPLEMENTED: %o [test %d seg %d] ***\n",
+	printf("-*** UNIMPLEMENTED: o%o [test %d seg %d] ***\n",
 		   instr, testno, testseg);
 	//assert(false);
 }
@@ -252,15 +259,15 @@ run_test(uint16_t* test)
 		int param = (w & M_PARM) >> 6;
 		uint32_t arg;
 
-		printf("-exec: %o ====================\n", w);
+		printf("-exec: o%o @ pos:o%o ====================\n", w, loc);
 		arg = getarg(loop_var, &test[loc]);
 		switch (w & M_CMD) {
 		case NFAILTST: // fail
 			puts("-nfailtest");
-			printf("-*** TEST %d-%d FAILED: TROUBLE # %d *** (arg %o)\n",
+			printf("-*** TEST %d-%d FAILED: TROUBLE # %d *** (arg o%o)\n",
 				   testno, testseg,
 				   100*testno + arg, arg);
-			printf("- online MCHB: %o\n", mchb);
+			printf("- online MCHB: o%o\n", mchb);
 			if (param == 0) {
 				return arg;
 			}
@@ -273,7 +280,7 @@ run_test(uint16_t* test)
 			printf("-*** TEST %d-%d FAILED: TROUBLE # %d ***\n",
 				   testno, testseg,
 				   100*testno + arg + ffs(mchb));
-			printf("- online MCHB: %o\n", mchb);
+			printf("- online MCHB: o%o\n", mchb);
 			return arg + ffs(mchb);
 			break;
 		case NPASSTST:
@@ -286,12 +293,12 @@ run_test(uint16_t* test)
 			int B = param & 0040;
 			int C = param & 0037;
 			bool compare;
-			printf("- mchb: %o\n", mchb);
-			printf("- a=%o b=%o c=%o\n", A, B, C);
+			printf("- mchb: o%o\n", mchb);
+			printf("- a=o%o b=o%o c=o%o\n", A, B, C);
 			if (A == 0100) { // A==1, whole register.
 				// Parity bits not compared.
 				compare = ((mchb & M_R20) == (arg & M_R20));
-				printf("- compare %o==%o? &%o, %d\n", mchb, arg, mchb&arg, compare);
+				printf("- compare o%o==o%o? &o%o, %d\n", mchb, arg, mchb&arg, compare);
 			} else { // A == 0, single bit
 				compare = (((mchb>>C) & 1) == (arg & 1));
 				printf("- compare bit[%d]: %d==%d, %d\n", C, (mchb>>C)&1, arg, compare);
@@ -358,10 +365,29 @@ run_test(uint16_t* test)
 				mchb = mch_call(MCH_LDMIRL, 0xd83a) >> 8;
 				break;
 			default:
-                                puts("u2");
-                                unimplemented(param);
+				puts("u2");
+				unimplemented(param);
 			}
 			break;
+		case N2SEND:
+			puts("-n2send");
+			switch (param) {
+			case 0167:
+				puts("- -br");
+				// BR0+1, ref PR-1c917-50 p.45 l.29
+				
+				// xxx it is unclear to me how this is different from
+				// NSEND(br).  copy-pasting code from there until it
+				// breaks i guess.
+
+				mchb = mch_call(MCH_LDMCHB, arg) >> 8;
+				// mchb =99=> gb =71=> br
+				mchb = mch_call(MCH_LDMIRL, 0x7199) >> 8;
+				break;
+			default:
+				puts("u6");
+				unimplemented(param);
+			}
 		case NRETRN:
 			puts("-nretrn");
 			switch (param) {
@@ -390,9 +416,23 @@ run_test(uint16_t* test)
 				break;
 			case 0173: // AR
 				puts("- -ar0");
-				// pr-1c912-50 p61
-				// ar0 =b1=> gb =99=> mchb
-				mchb = mch_call(MCH_LDMIRL, 0x99b1) >> 8;
+				// ar0 =71=> gb =99=> mchb
+
+				// - pr-1c917-50 p.46 l.03 requires that this is a
+				//   22-bith path from ar.
+				//
+				// - pr-1c912-50 p.61 l.03 comment says "ar copy 0".
+				//
+				// - only path from ar0 to mchb is thru f%b1, which is
+				//   a 16-bit path.
+				// 
+				// - is a 22 bit path from ar to mchb via f%71 but
+				//   that is with matcher enabled and so is 'ar'.
+				//
+				// pr-1c917-50 implies that the matcher runs, which
+				// settles it.
+
+				mchb = mch_call(MCH_LDMIRL, 0x9971) >> 8;
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			case 0175: // DML1
@@ -412,7 +452,7 @@ run_test(uint16_t* test)
 				mchb = mch_call(MCH_RTNMCHB, 0) >> 8;
 				break;
 			default:
-                                puts("u3");
+				puts("u3");
 				unimplemented(param);
 				// DML
 				// DML1
@@ -558,6 +598,7 @@ run_test(uint16_t* test)
 		case NTESTSEG:
 			printf("-ntestseg %d\n", param);
 			testseg = param;
+			printf("-*** TEST %d-%d BEGIN ***\n", testno, testseg);
 			break;
 		case NMICRO:
 			puts("-nmicro");
@@ -598,8 +639,8 @@ run_test(uint16_t* test)
 			mchb = mch_call(MCH_LDMIRH, arg) >> 8;
 			break;
 		default:
-			printf("-cur instr %o\n", w);
-                        puts("u5");
+			printf("-cur instr o%o\n", w);
+			puts("u5");
 			unimplemented(w & M_CMD);
 			break;
 		}

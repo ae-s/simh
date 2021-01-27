@@ -173,7 +173,7 @@ mchmsg(uint32 msg)
 	uint8 mcc = msg & 0xff;
 	R[NUM_MCHTR] = msg >> 8 & MM_R20;
 
-	printf("mchmsg: msg= %x, mcc= %x, mchtr= %o\n",
+	printf("mchmsg: msg= %#x, mcc= %#x, mchtr= o%o\n",
 		   msg, mcc, R[NUM_MCHTR]);
 
 	/* see sh B9GJ */
@@ -233,13 +233,13 @@ mchmsg(uint32 msg)
 		// 2. run decoders
 		// xxx decoders, or a full machine cycle?
 		seg1_p0();
-		printf("gb = %o\n", gb);
+		printf("gb = o%o\n", gb);
 		seg1_p1();
-		printf("gb = %o\n", gb);
+		printf("gb = o%o\n", gb);
 		seg1_p2();
-		printf("gb = %o\n", gb);
+		printf("gb = o%o\n", gb);
 		seg1_p3();
-		printf("gb = %o\n", gb);
+		printf("gb = o%o\n", gb);
 		break;
 	case MCH_MSTART:
 		// clear FRZ
@@ -265,7 +265,7 @@ mchmsg(uint32 msg)
 		break;
 	case MCH_RTNSS:
 		R[NUM_MCHTR] = R[NUM_SS];
-		printf("return ss of %o\n", R[NUM_SS]);
+		printf("return ss of o%o\n", R[NUM_SS]);
 		break;
 	case MCH_SPCLK:
 		xxx_unimplemented();
@@ -284,7 +284,7 @@ mchmsg(uint32 msg)
 	default: break;
 	}
 
-	printf("mchtr now =%o\n", R[NUM_MCHTR]);
+	printf("mchtr now =o%o\n", R[NUM_MCHTR]);
 	return mcc | (R[NUM_MCHTR] << 8);
 }
 
@@ -370,24 +370,24 @@ sim_instr(void)
 
 
 	seg0_p0();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 	seg1_p0();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 
 	seg0_p1();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 	seg1_p1();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 
 	seg0_p2();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 	seg1_p2();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 
 	seg0_p3();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 	seg1_p3();
-	printf("gb = %o\n", gb);
+	printf("gb = o%o\n", gb);
 
 	return SCPE_OK;
 }
@@ -427,7 +427,7 @@ run_adders(uint32_t* dml_output) {
 				+ (R[br[dml]] & M_R20)
 				+ add1;
 			dml_output[dml] = out & M_R20;
-			printf("out%d = %o\n", dml, dml_output[dml]);
+			printf("out%d = o%o\n", dml, dml_output[dml]);
 			// handle carry out, gated into MCS register
 			// sh b2ge loc h5: "CARH01" out from adder
 			// sh b2ca loc b6: "CCAR191" at loc 5h0
@@ -496,9 +496,9 @@ run_adders(uint32_t* dml_output) {
 		dml_output[dml] &= M_R20;
 	}
 
-	printf("dml0 output: ar0:%o br0:%o fr0:%o dml0:%o\n",
+	printf("dml0 output: ar0:o%o br0:o%o fr0:o%o dml0:o%o\n",
 		   R[NUM_AR0], R[NUM_BR0], R[NUM_FR0], dml_output[0]);
-	printf("dml1 output: ar1:%o br1:%o fr1:%o dml1:%o\n",
+	printf("dml1 output: ar1:o%o br1:o%o fr1:o%o dml1:o%o\n",
 		   R[NUM_AR1], R[NUM_BR1], R[NUM_FR1], dml_output[1]);
 }
 
@@ -610,7 +610,7 @@ seg1_p0(void) {
 #define GB22(from) gb = (from & MM_R20)
 
 	printf(":: f%%%02x => t%%%02x\n", (int)mymir.mi.from, (int)mymir.mi.to);
-	printf(":: mcs %o\n", (int)R[NUM_MCS]);
+	printf(":: mcs o%o\n", (int)R[NUM_MCS]);
 
 	/* == from field decoder ==
 	 * ref. sd-1c900-01 sh D13 (note 312)
@@ -663,14 +663,14 @@ seg1_p0(void) {
 		break;
 	case 0x8e: // ss [mr15] => gb (18)
 		GB18(R[NUM_SS]);
-		printf("gb %o loaded from ss %o\n", gb, R[NUM_SS]);
+		printf("gb o%o loaded from ss o%o\n", gb, R[NUM_SS]);
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
 
 	case 0x33: // cr => gb (22)
 		GB22(R[NUM_CR]);
-		printf("gb %o loaded from cr %o\n", gb, R[NUM_CR]);
+		printf("gb o%o loaded from cr o%o\n", gb, R[NUM_CR]);
 		break;
 	case 0x35: // hg => gb (18)
 		GB18(R[NUM_HG]);
@@ -782,8 +782,6 @@ seg1_p0(void) {
 		/* next 16 listed are 3o4 L and 1o4 R */
 
 	case 0x71: // ar => gb (22)
-		// why is the test failing. is something hinky going on?
-
 		// f3o4l7 f1o4r1
 		// far farl farh, on sh b2gm
 		// A register => leads AR1xx1
@@ -859,10 +857,12 @@ seg1_p0(void) {
 		break;
 	case 0xd2: // ibyt => gb (18)
 		// ??? wtf is ibyt
+		// instruction buffer Y-field
 		xxx_unimplemented();
 		break;
 	case 0xd4: // ibxt => gb (18)
 		// ?? wtf is ibxt
+		// instruction buffer X-field
 		xxx_unimplemented();
 		break;
 	case 0xd8: // misc dec row 0
@@ -873,7 +873,7 @@ seg1_p0(void) {
 		break;
 	case 0xe2: // br => gb (22)
 		GB22(R[NUM_BR0]);
-		printf("gb %o loaded from br0 %o\n", gb, R[NUM_BR0]);
+		printf("gb o%o loaded from br0 o%o\n", gb, R[NUM_BR0]);
 		// matcher
 		// xxx this is probably wrong?
 		if ((gb ^ R[NUM_BR1]) != 0) {
@@ -921,7 +921,7 @@ seg1_p0(void) {
 	switch ((uint8_t)mymir.mi.to) {
 		/* first 16 listed are 1o4 L and 3o4 R */
 	case 0x17: // gb(8-19,ph) => rar(0-11,ph) (B1GB)
-		printf("gbxrar %x\n", gb);
+		printf("gbxrar %#x\n", gb);
 		R[NUM_RAR] = gb >> 8;
 		R[NUM_RAR] |= gb & M_PH;
 		break;
@@ -967,7 +967,7 @@ seg1_p0(void) {
 		// 0001110111111111111111
 #define SS_MASK 0x77fff
 		R[NUM_SS] &= gb & SS_MASK;
-		printf("ss loaded from gb %o=>%o\n", gb, R[NUM_SS]);
+		printf("ss loaded from gb o%o=>o%o\n", gb, R[NUM_SS]);
 
 		break;
 	case 0x8d: // gb => ms [mr14]
@@ -981,7 +981,7 @@ seg1_p0(void) {
 		// bit 19 is connected to the power key.
 		// PL and PH are wired to provide a CC identity code.
 		R[NUM_SS] |= gb & SS_MASK;
-		printf("ss loaded from gb %o=>%o\n", gb, R[NUM_SS]);
+		printf("ss loaded from gb o%o=>o%o\n", gb, R[NUM_SS]);
 		break;
 
 		/* next 36 listed are 2o4 L and 2o4 R */
@@ -1057,7 +1057,7 @@ seg1_p0(void) {
 		break;
 	case 0x99: // gb => mchb [mr3] (22)
 		GB22(R[NUM_MCHB]);
-		printf("mchb loaded from gb %o\n", gb);
+		printf("mchb loaded from gb o%o\n", gb);
 		break;
 	case 0x9a: // spare
 		break;
@@ -1105,7 +1105,7 @@ seg1_p0(void) {
 	case 0x71: // gb => br (22)
 		GB22(R[NUM_BR0]);
 		GB22(R[NUM_BR1]);
-		printf("br %o loaded from gb %o\n", R[NUM_BR0], gb);
+		printf("br o%o loaded from gb o%o\n", R[NUM_BR0], gb);
 		// yes we have two DML
 		// B2GM loc g0: inh parity xxx
 		break;
@@ -1119,9 +1119,10 @@ seg1_p0(void) {
 		goto misc_dec;
 
 	case 0xb1: // gb => ar (22)
-		// B2GM loc g0: inh parity
+		// B2GM loc g0: inh parity check
 		GB22(R[NUM_AR0]);
 		GB22(R[NUM_AR1]);
+		printf("ar o%o loaded from gb o%o\n", R[NUM_AR0], gb);
 		break;
 	case 0xb2: // gb => ar0 (22)
 		GB22(R[NUM_AR0]);
@@ -1182,7 +1183,7 @@ seg1_p0(void) {
 misc_dec:
 	;
 	uint32_t decode_pt = mymir.q & 0xffff;
-	printf("md: %x\n", decode_pt);
+	printf("md: %#x\n", decode_pt);
 
 	/* xxx concerned that this switch might be slow */
 	switch (decode_pt) {
@@ -1434,7 +1435,7 @@ misc_dec:
 		break;
 	case 0xd83a: // rar => fn
 		// gate rar to fn [mdrarfn0]
-		printf("mdrarxfn: %o\n", R[NUM_RAR] & M_REG_FR);
+		printf("mdrarxfn: o%o\n", R[NUM_RAR] & M_REG_FR);
 		R[NUM_FR0] = R[NUM_RAR] & M_REG_FR;
 		R[NUM_FR1] = R[NUM_RAR] & M_REG_FR;
 		break;
@@ -1576,7 +1577,7 @@ misc_dec:
 		R[NUM_BR0] = M_PH | M_PL | M_R20;
 		// BR1 doesn't have parity bits, cite sd-1c900-01 sh b2ga loc e1
 		R[NUM_BR1] = M_R20;
-		printf("sbr: br0 %o, br1 %o\n", R[NUM_BR0], R[NUM_BR1]);
+		printf("sbr: br0 o%o, br1 o%o\n", R[NUM_BR0], R[NUM_BR1]);
 		break;
 	case 0x2bca: // zbr
 		// zbr: clear BR data bits, set ph/pl bits
